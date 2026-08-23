@@ -127,6 +127,20 @@ fn spawn_worker(
                     for line in r.output.lines() {
                         tx.send(Event::Log(line.to_string())).ok();
                     }
+                    if r.success && !dry_run {
+                        // Persist applied-state so the GUI shows it on next launch
+                        let sp = bazzitify::state::state_path();
+                        let mut st = bazzitify::state::load(&sp);
+                        if action == "apply" {
+                            st.mark_applied(&m.name, &bazzitify::state::now_rfc3339());
+                        } else {
+                            st.unmark(&m.name);
+                        }
+                        if let Err(e) = bazzitify::state::save(&sp, &st) {
+                            tx.send(Event::Log(format!("warn: could not save state: {e}")))
+                                .ok();
+                        }
+                    }
                     if r.success {
                         let status = if action == "apply" {
                             "applied"
@@ -429,14 +443,24 @@ fn run_gui() {
     let app = AppWindow::new().expect("failed to create window");
     app.set_distro_info(distro_info().into());
 
+    // Restore applied-state from previous runs
+    let applied = bazzitify::state::load(&bazzitify::state::state_path());
+
     let items: Vec<ModuleInfo> = discovered
         .iter()
-        .map(|m| ModuleInfo {
-            name: m.name.clone().into(),
-            description: m.description.clone().unwrap_or_default().into(),
-            details: m.long_description.join("\n").into(),
-            selected: false,
-            status: "available".into(),
+        .map(|m| {
+            let status = if applied.is_applied(&m.name) {
+                "applied"
+            } else {
+                "available"
+            };
+            ModuleInfo {
+                name: m.name.clone().into(),
+                description: m.description.clone().unwrap_or_default().into(),
+                details: m.long_description.join("\n").into(),
+                selected: false,
+                status: status.into(),
+            }
         })
         .collect();
     app.set_modules(items.as_slice().into());

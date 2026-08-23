@@ -529,6 +529,7 @@ dependencies = [
  "serde",
  "slint",
  "slint-build",
+ "tempfile",
  "thiserror 2.0.20",
  "toml 0.8.23",
 ]

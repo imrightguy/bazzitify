@@ -1,0 +1,129 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths-ignore: ["docs/**", "README.md"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Gate: everything must pass before artifacts are built/published
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: System dependencies (Slint/femtovg stack)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev libgbm-dev libxkbcommon-dev \
+            libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libudev-dev
+      - run: cargo fmt --check
+      - run: cargo build --locked
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+      - name: bash syntax (modules)
+        run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done
+
+  appimage:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev libgbm-dev libxkbcommon-dev \
+            libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libudev-dev file
+      - name: Build release binaries
+        run: cargo build --release --locked
+      - name: Stage AppDir
+        run: |
+          APPDIR=AppDir
+          install -Dm755 target/release/bazzitify         "$APPDIR/usr/bin/bazzitify"
+          install -Dm755 target/release/bazzitify-profile "$APPDIR/usr/bin/bazzitify-profile"
+          install -Dm644 packaging/bazzitify.desktop "$APPDIR/usr/share/applications/bazzitify.desktop"
+          install -Dm644 packaging/bazzitify.desktop "$APPDIR/bazzitify.desktop"
+          install -Dm644 packaging/bazzitify.png     "$APPDIR/bazzitify.png"
+          install -Dm644 packaging/bazzitify.png     "$APPDIR/usr/share/icons/hicolor/256x256/apps/bazzitify.png"
+      - name: Download linuxdeploy
+        run: |
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
+      - name: Smoke test binary
+        run: ./target/release/bazzitify-profile list | head -5
+      - name: Build AppImage
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ./linuxdeploy --appdir AppDir --output appimage
+          mv Bazzitify-*-x86_64.AppImage bazzitify-${VERSION}-x86_64.AppImage
+          ls -la *.AppImage
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: bazzitify-*.AppImage
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bazzitify-*-x86_64.AppImage
+          generate_release_notes: true
+
+  tarball:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libgbm-dev libxkbcommon-dev \
+            libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libudev-dev
+      - name: Build release binaries
+        run: cargo build --release --locked
+      - name: Package tarball (binaries + modules)
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          DIR=bazzitify-${VERSION}
+          mkdir -p "$DIR"/{bin,modules/lib}
+          cp target/release/bazzitify target/release/bazzitify-profile "$DIR/bin/"
+          cp modules/*.sh "$DIR/modules/"
+          cp modules/lib/*.sh "$DIR/modules/lib/"
+          cp README.md LICENSE "$DIR/" 2>/dev/null || true
+          tar czf "bazzitify-${VERSION}-x86_64.tar.gz" "$DIR"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          path: bazzitify-*.tar.gz
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bazzitify-*.tar.gz

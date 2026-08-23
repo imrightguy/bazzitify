@@ -26,7 +26,7 @@ Each item carries: **ID** · priority (P0 highest) · scope tag · acceptance cr
 ## Backlog
 
 ### P1 — engine maturity
-- [ ] BZ-14 [engine] Applied-state persistence: record applied modules in ~/.local/state/bazzitify/applied.json; GUI shows "applied ✓" on launch; implementer must add tests.
+- [x] BZ-14 [engine] Applied-state persistence: record applied modules in ~/.local/state/bazzitify/applied.json; GUI shows "applied ✓" on launch; implementer must add tests.
 - [ ] BZ-15 [gui] Per-module checkbox selection for batch apply (currently single or select-all); status column already exists in ui/app.slint.
 - [ ] BZ-16 [engine] Module dependency ordering: optional `# requires:` header; topological sort before batch apply; test with a fixture pair.
 - [ ] BZ-17 [cli] bin/bazzitify gains --json output for scripting/cron consumption.

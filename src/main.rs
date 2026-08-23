@@ -1,5 +1,6 @@
 //! bazzitify — GUI and CLI for Bazzite-style gaming optimization.
 
+use bazzitify::distro::{detect_distro, distro_pretty_name};
 use bazzitify::module::{Module, ModuleGraph};
 use bazzitify::profile::{Profile, ProfileError};
 use bazzitify::runner::{RunOpts, run_module_opts};
@@ -24,19 +25,6 @@ fn config_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("bazzitify")
         .join("profiles")
-}
-
-fn distro_info() -> String {
-    std::fs::read_to_string("/etc/os-release")
-        .ok()
-        .and_then(|s| {
-            s.lines().find(|l| l.starts_with("PRETTY_NAME=")).map(|l| {
-                l.trim_start_matches("PRETTY_NAME=")
-                    .trim_matches('"')
-                    .to_string()
-            })
-        })
-        .unwrap_or_else(|| "unknown distro".into())
 }
 
 enum Event {
@@ -257,17 +245,6 @@ fn cli_list() -> Result<(), ProfileError> {
     Ok(())
 }
 
-fn detect_distro() -> String {
-    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
-        for line in content.lines() {
-            if line.starts_with("ID=") {
-                return line.trim_start_matches("ID=").trim_matches('"').to_string();
-            }
-        }
-    }
-    "unknown".to_string()
-}
-
 fn print_usage() {
     eprintln!("bazzitify — Bazzite-style gaming optimization for mutable distros");
     eprintln!();
@@ -441,7 +418,7 @@ fn run_gui() {
         .unwrap_or_default();
 
     let app = AppWindow::new().expect("failed to create window");
-    app.set_distro_info(distro_info().into());
+    app.set_distro_info(distro_pretty_name().into());
 
     // Restore applied-state from previous runs
     let applied = bazzitify::state::load(&bazzitify::state::state_path());

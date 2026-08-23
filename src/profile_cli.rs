@@ -1,5 +1,6 @@
 //! CLI for profile export/import/list operations.
 
+use bazzitify::distro::detect_distro;
 use bazzitify::profile::{Profile, ProfileError};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -108,16 +109,4 @@ fn do_list(config_dir: &Path) -> Result<(), ProfileError> {
         }
     }
     Ok(())
-}
-
-fn detect_distro() -> String {
-    // Try to read /etc/os-release
-    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
-        for line in content.lines() {
-            if line.starts_with("ID=") {
-                return line.trim_start_matches("ID=").trim_matches('"').to_string();
-            }
-        }
-    }
-    "unknown".to_string()
 }

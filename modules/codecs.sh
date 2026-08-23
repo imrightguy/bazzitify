@@ -9,35 +9,46 @@
 # depends: gpu-drivers
 set -euo pipefail
 
-PACMAN_PKGS=(
-  libva-mesa-driver   # VAAPI for Mesa/AMD
-  intel-media-driver  # VAAPI for Intel
-  gstreamer-vaapi
-  mangohud lib32-mangohud
-  obs-vkcapture lib32-obs-vkcapture
-  vkbasalt lib32-vkbasalt
-)
-APT_PKGS=(mesa-va-drivers gstreamer1.0-vaapi mangohud)
-
-have() { pacman -Qi "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
 
 module_apply() {
-  if command -v pacman >/dev/null 2>&1; then
-    local missing=()
-    for p in "${PACMAN_PKGS[@]}"; do have "$p" || missing+=("$p"); done
-    (( ${#missing[@]} )) && sudo pacman -S --needed --noconfirm "${missing[@]}"
+    local distro
+    distro=$(get_distro)
+    echo "  Installing codecs & capture packages for $distro"
+
+    warn_if_unknown_distro || true
+
+    # Resolve packages for current distro
+    local packages
+    packages=$(resolve_package_list \
+        libva-mesa-driver intel-media-driver gstreamer-vaapi \
+        mangohud lib32-mangohud \
+        obs-vkcapture lib32-obs-vkcapture \
+        vkbasalt lib32-vkbasalt \
+        ffmpeg gstreamer codecs vaapi vdpau)
+    
+    if [[ -z "$packages" ]]; then
+        echo "  No packages to install for $distro" >&2
+        return 1
+    fi
+
+    pkg_install $packages
+
     echo "MangoHud usage: mangohud %command% in Steam launch options"
     echo "vkBasalt usage:  ENABLE_VKBASALT=1 %command%"
     echo "OBS capture:     run game through 'obs-vkcapture steam' or set in Lutris"
-  elif command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get install -y "${APT_PKGS[@]}"
-  else
-    echo "unsupported package manager" >&2; return 1
-  fi
 }
 
 module_undo() {
-  echo "codecs/overlay packages left installed — they're inert without per-game opt-in."
-  echo "to remove manually on Arch:"
-  echo "  sudo pacman -Rns ${PACMAN_PKGS[*]}"
+    echo "codecs/overlay packages left installed — they're inert without per-game opt-in."
+    echo "to remove manually on Arch:"
+    local packages
+    packages=$(resolve_package_list \
+        libva-mesa-driver intel-media-driver gstreamer-vaapi \
+        mangohud lib32-mangohud \
+        obs-vkcapture lib32-obs-vkcapture \
+        vkbasalt lib32-vkbasalt \
+        ffmpeg gstreamer codecs vaapi vdpau)
+    echo "  sudo pacman -Rns $packages"
 }

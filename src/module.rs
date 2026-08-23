@@ -38,16 +38,29 @@ impl Module {
                 }
             }
         }
-        // Dependencies: "# depends: module1 module2 ..."
+        // Dependencies: "# requires: module1 module2 ..." (preferred) or "# depends: ..." (legacy)
         let mut depends = Vec::new();
         for line in source.lines() {
             let t = line.trim();
-            if let Some(rest) = t.strip_prefix("# depends:") {
+            if let Some(rest) = t.strip_prefix("# requires:") {
                 let rest = rest.trim();
                 if !rest.is_empty() {
                     depends = rest.split_whitespace().map(String::from).collect();
                 }
-                break; // only first # depends: line counts
+                break; // only first # requires: line counts
+            }
+        }
+        // Fallback to legacy # depends: header
+        if depends.is_empty() {
+            for line in source.lines() {
+                let t = line.trim();
+                if let Some(rest) = t.strip_prefix("# depends:") {
+                    let rest = rest.trim();
+                    if !rest.is_empty() {
+                        depends = rest.split_whitespace().map(String::from).collect();
+                    }
+                    break;
+                }
             }
         }
         let has_apply = contains_fn(source, "module_apply");

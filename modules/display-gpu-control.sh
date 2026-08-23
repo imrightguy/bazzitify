@@ -5,7 +5,7 @@
 # long: • CoreCtrl — AMD/Intel CPU+GPU profile control
 # long: • gamescope — Valve's micro-compositor (Steam Gaming Mode engine)
 # long: LACT's systemd service is enabled so settings persist across reboots.
-# depends: gpu-drivers
+# requires: gpu-drivers
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"

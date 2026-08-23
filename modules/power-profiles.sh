@@ -8,7 +8,7 @@
 # long: • Installs/enables power-profiles-daemon with 'performance' profile as user default
 # long: • Creates /etc/tuned/bazzitify-gaming.tuned for tuned users as alternative
 # long: Laptop caveat: performance governor reduces battery life; user opts in knowingly
-# depends: kernel-params sysctl
+# requires: kernel-params sysctl
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"

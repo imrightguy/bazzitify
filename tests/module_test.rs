@@ -12,6 +12,14 @@ fn parses_module_with_desc_and_apply() {
 
 #[test]
 fn parses_module_with_dependencies() {
+    let script = "#!/bin/bash\n# desc: Kernel params\n# requires: gpu-drivers sysctl\nmodule_apply() { echo hi; }\n";
+    let m = Module::parse("kernel-params", script).unwrap();
+    assert_eq!(m.depends, vec!["gpu-drivers", "sysctl"]);
+}
+
+#[test]
+fn parses_module_with_legacy_depends_header() {
+    // Backward compatibility: # depends: should still work
     let script = "#!/bin/bash\n# desc: Kernel params\n# depends: gpu-drivers sysctl\nmodule_apply() { echo hi; }\n";
     let m = Module::parse("kernel-params", script).unwrap();
     assert_eq!(m.depends, vec!["gpu-drivers", "sysctl"]);
@@ -30,13 +38,13 @@ fn discovers_modules_with_dependencies() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("a.sh"),
-        "# desc: A\n# depends: b\nmodule_apply() { :; }\n",
+        "# desc: A\n# requires: b\nmodule_apply() { :; }\n",
     )
     .unwrap();
     std::fs::write(dir.join("b.sh"), "# desc: B\nmodule_apply() { :; }\n").unwrap();
     std::fs::write(
         dir.join("c.sh"),
-        "# desc: C\n# depends: a b\nmodule_apply() { :; }\n",
+        "# desc: C\n# requires: a b\nmodule_apply() { :; }\n",
     )
     .unwrap();
 
@@ -60,13 +68,13 @@ fn topological_sort_orders_by_dependencies() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("a.sh"),
-        "# desc: A\n# depends: b\nmodule_apply() { :; }\n",
+        "# desc: A\n# requires: b\nmodule_apply() { :; }\n",
     )
     .unwrap();
     std::fs::write(dir.join("b.sh"), "# desc: B\nmodule_apply() { :; }\n").unwrap();
     std::fs::write(
         dir.join("c.sh"),
-        "# desc: C\n# depends: a b\nmodule_apply() { :; }\n",
+        "# desc: C\n# requires: a b\nmodule_apply() { :; }\n",
     )
     .unwrap();
 
@@ -91,12 +99,12 @@ fn topological_sort_detects_cycle() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("a.sh"),
-        "# desc: A\n# depends: b\nmodule_apply() { :; }\n",
+        "# desc: A\n# requires: b\nmodule_apply() { :; }\n",
     )
     .unwrap();
     std::fs::write(
         dir.join("b.sh"),
-        "# desc: B\n# depends: a\nmodule_apply() { :; }\n",
+        "# desc: B\n# requires: a\nmodule_apply() { :; }\n",
     )
     .unwrap();
 
@@ -116,7 +124,7 @@ fn topological_sort_errors_on_missing_dependency() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("a.sh"),
-        "# desc: A\n# depends: nonexistent\nmodule_apply() { :; }\n",
+        "# desc: A\n# requires: nonexistent\nmodule_apply() { :; }\n",
     )
     .unwrap();
 
@@ -136,13 +144,13 @@ fn reverse_topological_sort_for_undo() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("a.sh"),
-        "# desc: A\n# depends: b\nmodule_apply() { :; }\n",
+        "# desc: A\n# requires: b\nmodule_apply() { :; }\n",
     )
     .unwrap();
     std::fs::write(dir.join("b.sh"), "# desc: B\nmodule_apply() { :; }\n").unwrap();
     std::fs::write(
         dir.join("c.sh"),
-        "# desc: C\n# depends: a b\nmodule_apply() { :; }\n",
+        "# desc: C\n# requires: a b\nmodule_apply() { :; }\n",
     )
     .unwrap();
 
@@ -158,6 +166,38 @@ fn reverse_topological_sort_for_undo() {
             undo_order[apply_order.len() - 1 - i].name
         );
     }
+
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn discovers_modules_with_legacy_depends_header() {
+    // Backward compatibility: modules with # depends: should still be discovered
+    let dir =
+        std::env::temp_dir().join(format!("bazzitify-test-{}-legacy-deps", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("a.sh"),
+        "# desc: A\n# depends: b\nmodule_apply() { :; }\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("b.sh"), "# desc: B\nmodule_apply() { :; }\n").unwrap();
+    std::fs::write(
+        dir.join("c.sh"),
+        "# desc: C\n# depends: a b\nmodule_apply() { :; }\n",
+    )
+    .unwrap();
+
+    let mods = Module::discover(&dir).unwrap();
+    assert_eq!(mods.len(), 3);
+
+    let a = mods.iter().find(|m| m.name == "a").unwrap();
+    let b = mods.iter().find(|m| m.name == "b").unwrap();
+    let c = mods.iter().find(|m| m.name == "c").unwrap();
+
+    assert_eq!(a.depends, vec!["b"]);
+    assert!(b.depends.is_empty());
+    assert_eq!(c.depends, vec!["a", "b"]);
 
     std::fs::remove_dir_all(&dir).unwrap();
 }

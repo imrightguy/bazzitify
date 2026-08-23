@@ -6,7 +6,7 @@
 # long: • OBS VkCapture — hardware-accelerated game capture for OBS
 # long: • vkBasalt — Vulkan post-processing layer (CAS sharpening etc.)
 # long: • GStreamer vaapi plugins for desktop video players
-# depends: gpu-drivers
+# requires: gpu-drivers
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"

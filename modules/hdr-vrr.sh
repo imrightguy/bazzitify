@@ -7,7 +7,7 @@
 # long: • sway: adds output config for adaptive-sync in sway config
 # long: • COSMIC: enables HDR + VRR via cosmic-compiler config
 # long: Backs up all modified config files before changes; module_undo restores them exactly.
-# depends: gpu-drivers display-gpu-control
+# requires: gpu-drivers display-gpu-control
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"

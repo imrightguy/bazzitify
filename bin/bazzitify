@@ -26,7 +26,11 @@ topological_order() {
   for f in "$MODULES_DIR"/*.sh; do
     [[ -e "$f" ]] || continue
     name=$(basename "$f" .sh)
-    deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    # Prefer # requires:, fallback to # depends:
+    deps=$(grep -m1 '^# requires:' "$f" | cut -d: -f2- | xargs || true)
+    if [[ -z "$deps" ]]; then
+      deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    fi
     echo "$name $deps" >> "$tmpdir/deps.txt"
   done
 
@@ -105,7 +109,11 @@ list_modules() {
     [[ -e "$f" ]] || { echo "  (none yet)"; return; }
     # shellcheck disable=SC1090
     desc=$(grep -m1 '^# desc:' "$f" | cut -d: -f2- || true)
-    deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    # Prefer # requires:, fallback to # depends:
+    deps=$(grep -m1 '^# requires:' "$f" | cut -d: -f2- | xargs || true)
+    if [[ -z "$deps" ]]; then
+      deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    fi
     if [[ -n "$deps" ]]; then
       printf '  %-20s %s (depends: %s)\n' "$(basename "$f" .sh)" "$desc" "$deps"
     else

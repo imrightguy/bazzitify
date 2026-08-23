@@ -1,0 +1,71 @@
+# bazzitify — main entry point
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULES_DIR="$SCRIPT_DIR/../modules"
+STATE_DIR="$HOME/.local/state/bazzitify"
+LOG_FILE="$STATE_DIR/applied.log"
+
+mkdir -p "$STATE_DIR"
+
+list_modules() {
+  echo "Available modules:"
+  for f in "$MODULES_DIR"/*.sh; do
+    [[ -e "$f" ]] || { echo "  (none yet)"; return; }
+    # shellcheck disable=SC1090
+    desc=$(grep -m1 '^# desc:' "$f" | cut -d: -f2- || true)
+    printf '  %-20s %s\n' "$(basename "$f" .sh)" "$desc"
+  done
+}
+
+run_module() {
+  local name="$1"; shift || true
+  local f="$MODULES_DIR/$name.sh"
+  if [[ ! -f "$f" ]]; then
+    echo "Unknown module: $name" >&2; exit 1
+  fi
+  echo "==> $name"
+  # shellcheck disable=SC1090
+  source "$f"
+  if declare -F "module_apply" >/dev/null; then
+    module_apply "$@"
+    echo "$(date -Is) $name" >> "$LOG_FILE"
+  else
+    echo "  (module defines no module_apply, skipped)" >&2
+  fi
+}
+
+undo_module() {
+  local name="$1"
+  local f="$MODULES_DIR/$name.sh"
+  [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  if declare -F "module_undo" >/dev/null; then
+    module_undo
+  else
+    echo "Module $name has no undo — skipping." >&2
+  fi
+}
+
+case "${1:-}" in
+  --list|-l) list_modules ;;
+  --dry-run|-n)
+    echo "DRY RUN — modules that would run:"
+    list_modules ;;
+  undo)
+    [[ -n "${2:-}" ]] && undo_module "$2" || echo "Usage: bazzitify undo <module>" ;;
+  --all)
+    for f in "$MODULES_DIR"/*.sh; do
+      [[ -e "$f" ]] || { echo "No modules found." >&2; exit 1; }
+      run_module "$(basename "$f" .sh)"
+    done ;;
+  "")
+    echo "bazzitify — Bazzite-style gaming optimization for mutable distros"
+    echo
+    echo "Usage: bazzitify <module|--all|--list|--dry-run|undo <module>>"
+    echo
+    list_modules ;;
+  *) run_module "$1" "${@:2}" ;;
+esac

@@ -2,8 +2,6 @@
 # desc: Services — enable gamemode/gamemoded socket, disable useless-for-gaming services
 set -euo pipefail
 
-ENABLE=(gamemode.service 2>/dev/null || true)
-
 module_apply() {
   # GameMode daemon
   if pacman -Qi gamemode >/dev/null 2>&1 || pacman -Si gamemode >/dev/null 2>&1; then

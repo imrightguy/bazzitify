@@ -216,3 +216,24 @@ fn discovers_hdr_vrr_module() {
     assert!(hdr.has_undo, "hdr-vrr should have module_undo");
     assert_eq!(hdr.depends, vec!["gpu-drivers", "display-gpu-control"]);
 }
+
+#[test]
+fn discovers_power_profiles_module() {
+    let dir = std::path::Path::new("modules");
+    let mods = bazzitify::module::Module::discover(dir).unwrap();
+    let power = mods
+        .iter()
+        .find(|m| m.name == "power-profiles")
+        .expect("power-profiles module should be discovered");
+    assert!(
+        power.description.is_some(),
+        "power-profiles should have description"
+    );
+    assert!(
+        !power.long_description.is_empty(),
+        "power-profiles should have long description"
+    );
+    assert!(power.has_apply, "power-profiles should have module_apply");
+    assert!(power.has_undo, "power-profiles should have module_undo");
+    assert_eq!(power.depends, vec!["kernel-params", "sysctl"]);
+}

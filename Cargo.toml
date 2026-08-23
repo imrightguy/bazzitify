@@ -1,0 +1,15 @@
+[package]
+name = "bazzitify"
+version = "0.1.0"
+edition = "2024"
+description = "Bazzite-style gaming optimization for mutable distros — Rust GUI"
+
+[dependencies]
+slint = "1.17.1"
+
+[build-dependencies]
+slint-build = "1.17.1"
+
+[profile.release]
+lto = true
+strip = true

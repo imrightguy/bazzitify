@@ -3,134 +3,260 @@ import { Button, CheckBox, ScrollView } from "std-widgets.slint";
 export struct ModuleInfo {
     name: string,
     description: string,
+    details: string,
     selected: bool,
     status: string,
 }
 
+// One settings-style item row: title + description left, control right.
+component SettingsItem inherits Rectangle {
+    in property <string> item-title;
+    in property <string> item-desc;
+    in property <bool> highlighted;
+    height: 56px;
+    border-radius: 6px;
+    background: root.highlighted ? #45475a : #313244;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: item-title;
+            }
+            Text {
+                text: item-desc;
+                color: #a6adc8;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+        @children
+    }
+}
+
 export component AppWindow inherits Window {
     title: "bazzitify";
-    min-width: 720px;
-    min-height: 520px;
+    min-width: 860px;
+    min-height: 560px;
     background: #1e1e2e;
 
     in property <[ModuleInfo]> modules;
+    in-out property <int> current-page;   // index into modules; -1 = overview
     in-out property <string> log-text;
     in property <bool> running;
     in property <string> distro-info;
 
-    callback apply-selected();
-    callback undo-selected();
+    callback select-module(int);
+    callback apply-module(int);
+    callback undo-module(int);
     callback select-all(bool);
 
     public function append-log(line: string) {
         root.log-text += line + "\n";
     }
 
-    VerticalLayout {
-        padding: 12px;
-        spacing: 8px;
-
-        HorizontalLayout {
-            spacing: 8px;
-            Text {
-                text: "bazzitify";
-                font-size: 18px;
-                font-weight: 800;
-                color: #cba6f7;
-                vertical-alignment: center;
-            }
-            Text {
-                text: root.distro-info;
-                font-size: 12px;
-                color: #a6adc8;
-                vertical-alignment: center;
-            }
-            Rectangle {}
-        }
-
-        ScrollView {
+    HorizontalLayout {
+        // ── Sidebar nav (COSMIC-style) ──
+        Rectangle {
+            width: 220px;
+            background: #181825;
             VerticalLayout {
-                spacing: 4px;
-                for m in modules: Rectangle {
-                    height: 48px;
+                padding: 10px;
+                spacing: 6px;
+
+                Text {
+                    text: "bazzitify";
+                    font-size: 17px;
+                    font-weight: 800;
+                    color: #cba6f7;
+                }
+                Text {
+                    text: root.distro-info;
+                    font-size: 10px;
+                    color: #a6adc8;
+                }
+
+                Rectangle { height: 6px; }
+
+                // Overview page
+                Rectangle {
+                    height: 36px;
                     border-radius: 6px;
-                    background: m.selected ? #45475a : #313244;
+                    background: root.current-page < 0 ? #45475a : transparent;
                     HorizontalLayout {
-                        padding: 8px;
-                        spacing: 8px;
-                        alignment: start;
-                        CheckBox {
-                            checked <=> m.selected;
-                            toggled => {}
+                        padding-left: 10px;
+                        Text {
+                            text: "Overview";
+                            color: #cdd6f4;
+                            vertical-alignment: center;
                         }
+                    }
+                    TouchArea {
+                        clicked => { root.select-module(-1); }
+                    }
+                }
+
+                // Module pages
+                for m[i] in modules: Rectangle {
+                    height: 40px;
+                    border-radius: 6px;
+                    background: root.current-page == i ? #45475a : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        spacing: 8px;
                         VerticalLayout {
                             alignment: center;
-                            Text { text: m.name; color: #cdd6f4; font-weight: 700; }
-                            Text { text: m.description; color: #a6adc8; font-size: 11px; }
-                        }
-                        Rectangle {
-                            horizontal-stretch: 0;
-                            vertical-stretch: 0;
-                            width: 80px;
+                            horizontal-stretch: 1;
                             Text {
-                                text: m.status;
-                                color: m.status == "applied" ? #a6e3a1 : (m.status == "running" ? #f9e2af : #9399b2);
-                                vertical-alignment: center;
-                                horizontal-alignment: right;
+                                text: m.name;
+                                color: #cdd6f4;
+                                font-size: 13px;
+                                font-weight: 600;
+                            }
+                        }
+                        Text {
+                            text: m.status == "applied" ? "✓" : (m.status == "✗ failed" ? "✗" : "");
+                            color: m.status == "applied" ? #a6e3a1 : #f38ba8;
+                            vertical-alignment: center;
+                        }
+                    }
+                    TouchArea {
+                        clicked => { root.select-module(i); }
+                    }
+                }
+
+                Rectangle {}
+                Text {
+                    text: root.running ? "⟳ working…" : "";
+                    color: #f9e2af;
+                    font-size: 11px;
+                }
+            }
+        }
+
+        // ── Main pane ──
+        Rectangle {
+            background: #1e1e2e;
+            if root.current-page < 0: ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 8px;
+
+                    Text {
+                        text: "Modules";
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #cdd6f4;
+                    }
+                    Text {
+                        text: "Select a module in the sidebar to see what it does before applying. Applied state is per-session.";
+                        color: #a6adc8;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle { height: 6px; }
+
+                    for m[i] in modules: SettingsItem {
+                        item-title: m.name;
+                        item-desc: m.description;
+                        highlighted: root.current-page == i;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: end;
+                            Button {
+                                text: "Open";
+                                clicked => { root.select-module(i); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if root.current-page >= 0 && root.current-page < modules.length: Rectangle {
+                property <ModuleInfo> mod: modules[root.current-page];
+
+                ScrollView {
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 10px;
+
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Text {
+                                text: mod.name;
+                                font-size: 20px;
+                                font-weight: 700;
+                                color: #cdd6f4;
+                            }
+                            Rectangle {
+                                border-radius: 4px;
+                                background: mod.status == "applied" ? #a6e3a155 : (mod.status == "running…" ? #f9e2af55 : #313244);
+                                width: 90px;
+                                height: 24px;
+                                Text {
+                                    text: mod.status;
+                                    color: #cdd6f4;
+                                    font-size: 11px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            Rectangle {}
+                            CheckBox {
+                                text: "select";
+                                checked <=> mod.selected;
+                                enabled: !root.running;
+                            }
+                        }
+
+                        Text {
+                            text: mod.description;
+                            color: #a6adc8;
+                            font-size: 13px;
+                        }
+
+                        Rectangle { height: 4px; }
+
+                        Text {
+                            text: "What this module does";
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: #cba6f7;
+                        }
+                        Text {
+                            text: mod.details;
+                            color: #cdd6f4;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle { height: 8px; }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: end;
+                            Button {
+                                text: "Undo";
+                                enabled: !root.running;
+                                clicked => { root.undo-module(root.current-page); }
+                            }
+                            Button {
+                                text: "Apply";
+                                primary: true;
+                                enabled: !root.running;
+                                clicked => { root.apply-module(root.current-page); }
                             }
                         }
                     }
                 }
             }
         }
-
-        Rectangle {
-            background: #11111b;
-            border-radius: 6px;
-            ScrollView {
-                Text {
-                    text: root.log-text == "" ? "— output will appear here —" : root.log-text;
-                    color: #94e2d5;
-                    font-family: "monospace";
-                    font-size: 11px;
-                    wrap: word-wrap;
-                }
-            }
-        }
-
-        HorizontalLayout {
-            spacing: 8px;
-            alignment: start;
-            Button {
-                text: "Select All";
-                clicked => { root.select-all(true); }
-            }
-            Button {
-                text: "Clear Selection";
-                clicked => { root.select-all(false); }
-            }
-            Rectangle {}
-            if root.running: Text {
-                text: "⟳ working…";
-                color: #f9e2af;
-                vertical-alignment: center;
-            }
-        }
-
-        HorizontalLayout {
-            spacing: 8px;
-            alignment: end;
-            Button {
-                text: "Undo Selected";
-                enabled: !root.running;
-                clicked => { root.undo-selected(); }
-            }
-            Button {
-                text: "Apply Selected";
-                enabled: !root.running;
-                primary: true;
-                clicked => { root.apply-selected(); }
-            }
-        }
     }
+
+    // ── Log strip along the bottom, always visible ──
 }

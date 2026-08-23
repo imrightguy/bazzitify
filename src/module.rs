@@ -9,6 +9,7 @@ use std::path::Path;
 pub struct Module {
     pub name: String,
     pub description: Option<String>,
+    pub long_description: Vec<String>,
     pub has_apply: bool,
     pub has_undo: bool,
 }
@@ -25,11 +26,23 @@ impl Module {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(String::from);
+        // Long description: consecutive "# long:" lines (rendered as a detail block in the GUI)
+        let mut long_description = Vec::new();
+        for line in source.lines() {
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("# long:") {
+                let rest = rest.trim();
+                if !rest.is_empty() {
+                    long_description.push(rest.to_string());
+                }
+            }
+        }
         let has_apply = contains_fn(source, "module_apply");
         let has_undo = contains_fn(source, "module_undo");
         Ok(Self {
             name: name.into(),
             description,
+            long_description,
             has_apply,
             has_undo,
         })

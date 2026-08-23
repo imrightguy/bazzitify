@@ -33,6 +33,114 @@ enum Event {
     Done,
 }
 
+fn set_module_status(app: &AppWindow, name: &str, status: &str) {
+    let model = app.get_modules();
+    for i in 0..model.row_count() {
+        if let Some(mut row) = model.row_data(i) {
+            if row.name == name {
+                row.status = status.into();
+                model.set_row_data(i, row);
+                break;
+            }
+        }
+    }
+}
+
+fn spawn_worker(
+    handle: &slint::Weak<AppWindow>,
+    tx: mpsc::Sender<Event>,
+    dir: PathBuf,
+    selected: Vec<bazzitify::module::Module>,
+    action: &'static str,
+) {
+    if let Some(app) = handle.upgrade() {
+        app.set_running(true);
+    }
+    std::thread::spawn(move || {
+        if selected.is_empty() {
+            tx.send(Event::Log("nothing selected".into())).ok();
+            tx.send(Event::Done).ok();
+            return;
+        }
+        for m in &selected {
+            if matches!(action, "undo") && !m.has_undo {
+                tx.send(Event::Log(format!(
+                    "[{action}:{}] no undo function; skipped",
+                    m.name
+                )))
+                .ok();
+                continue;
+            }
+            if action == "apply" && !m.has_apply {
+                tx.send(Event::Log(format!(
+                    "[{action}:{}] no apply function; skipped",
+                    m.name
+                )))
+                .ok();
+                continue;
+            }
+            tx.send(Event::Status(m.name.clone(), "running…".into()))
+                .ok();
+            tx.send(Event::Log(format!("── {action} {} ──", m.name)))
+                .ok();
+            match bazzitify::runner::run_module(&dir, m, action) {
+                Ok(r) => {
+                    for line in r.output.lines() {
+                        tx.send(Event::Log(line.to_string())).ok();
+                    }
+                    if r.success {
+                        let status = if action == "apply" {
+                            "applied"
+                        } else {
+                            "undone"
+                        };
+                        tx.send(Event::Status(m.name.clone(), status.into())).ok();
+                        tx.send(Event::Log(format!("✓ {} ok (exit 0)", m.name)))
+                            .ok();
+                    } else {
+                        tx.send(Event::Status(m.name.clone(), "✗ failed".into()))
+                            .ok();
+                        tx.send(Event::Log(format!(
+                            "✗ {} failed (exit {:?})",
+                            m.name, r.exit_code
+                        )))
+                        .ok();
+                    }
+                }
+                Err(e) => {
+                    tx.send(Event::Status(m.name.clone(), "✗ failed".into()))
+                        .ok();
+                    tx.send(Event::Log(format!("error running {}: {e}", m.name)))
+                        .ok();
+                }
+            }
+        }
+        tx.send(Event::Done).ok();
+    });
+}
+
+fn run_one(
+    handle: &slint::Weak<AppWindow>,
+    tx: &mpsc::Sender<Event>,
+    dir: &std::path::Path,
+    mods: &[bazzitify::module::Module],
+    action: &'static str,
+    index: i32,
+) {
+    if index < 0 {
+        return;
+    }
+    let idx = index as usize;
+    let Some(m) = mods.get(idx) else { return };
+    spawn_worker(
+        handle,
+        tx.clone(),
+        dir.to_path_buf(),
+        vec![m.clone()],
+        action,
+    );
+}
+
 fn main() {
     let dir = modules_dir();
     let discovered = bazzitify::module::Module::discover(&dir)
@@ -47,14 +155,16 @@ fn main() {
         .map(|m| ModuleInfo {
             name: m.name.clone().into(),
             description: m.description.clone().unwrap_or_default().into(),
+            details: m.long_description.join("\n").into(),
             selected: false,
             status: "available".into(),
         })
         .collect();
     app.set_modules(items.as_slice().into());
+    app.set_current_page(-1);
 
-    let (tx, rx) = mpsc::channel::<Event>();
     let handle = app.as_weak();
+    let (tx, rx) = mpsc::channel::<Event>();
 
     // UI updater thread: applies engine events on the Slint event loop.
     {
@@ -62,7 +172,7 @@ fn main() {
         std::thread::spawn(move || {
             while let Ok(ev) = rx.recv() {
                 let weak = weak.clone();
-                slint::invoke_from_event_loop(move || match ev {
+                let _ = slint::invoke_from_event_loop(move || match ev {
                     Event::Log(line) => {
                         if let Some(app) = weak.upgrade() {
                             app.invoke_append_log(slint::SharedString::from(&line));
@@ -70,16 +180,7 @@ fn main() {
                     }
                     Event::Status(name, status) => {
                         if let Some(app) = weak.upgrade() {
-                            let model = app.get_modules();
-                            for i in 0..model.row_count() {
-                                if model.row_data(i).map(|r| r.name == name).unwrap_or(false) {
-                                    if let Some(mut row) = model.row_data(i) {
-                                        row.status = status.into();
-                                        model.set_row_data(i, row);
-                                    }
-                                    break;
-                                }
-                            }
+                            set_module_status(&app, &name, &status);
                         }
                     }
                     Event::Done => {
@@ -87,139 +188,48 @@ fn main() {
                             app.set_running(false);
                         }
                     }
-                })
-                .ok();
+                });
             }
         });
     }
 
-    fn set_all_selected(handle: &slint::Weak<AppWindow>, value: bool) {
-        if let Some(app) = handle.upgrade() {
-            let model = app.get_modules();
-            for i in 0..model.row_count() {
-                if let Some(mut row) = model.row_data(i) {
-                    row.selected = value;
-                    model.set_row_data(i, row);
-                }
+    {
+        let handle = handle.clone();
+        app.on_select_module(move |i| {
+            if let Some(app) = handle.upgrade() {
+                app.set_current_page(i);
             }
-        }
+        });
     }
 
     {
         let handle = handle.clone();
-        app.on_select_all(move |v| set_all_selected(&handle, v));
-    }
-
-    fn run_modules(
-        handle: &slint::Weak<AppWindow>,
-        tx: &mpsc::Sender<Event>,
-        dir: &std::path::Path,
-        mods: &[bazzitify::module::Module],
-        action: &'static str,
-    ) {
-        if let Some(app) = handle.upgrade() {
-            app.set_running(true);
-        }
-        let tx = tx.clone();
-        let dir: PathBuf = dir.to_path_buf();
-        let selected: Vec<bazzitify::module::Module> = {
-            let names: Vec<String> = handle
-                .upgrade()
-                .map(|app| {
-                    app.get_modules()
-                        .iter()
-                        .filter(|m| m.selected)
-                        .map(|m| m.name.to_string())
-                        .collect()
-                })
-                .unwrap_or_default();
-            mods.iter()
-                .filter(|m| names.contains(&m.name))
-                .cloned()
-                .collect()
-        };
-
-        std::thread::spawn(move || {
-            if selected.is_empty() {
-                tx.send(Event::Log("nothing selected".into())).ok();
-                tx.send(Event::Done).ok();
-                return;
-            }
-            for m in &selected {
-                if action == "undo" && !m.has_undo {
-                    tx.send(Event::Log(format!(
-                        "[{}:{}] no undo function; skipped",
-                        action, m.name
-                    )))
-                    .ok();
-                    continue;
-                }
-                if action == "apply" && !m.has_apply {
-                    tx.send(Event::Log(format!(
-                        "[{}:{}] no apply function; skipped",
-                        action, m.name
-                    )))
-                    .ok();
-                    continue;
-                }
-                tx.send(Event::Status(m.name.clone(), "running…".into()))
-                    .ok();
-                tx.send(Event::Log(format!("── {} {} ──", action, m.name)))
-                    .ok();
-                match bazzitify::runner::run_module(&dir, m, action) {
-                    Ok(r) => {
-                        for line in r.output.lines() {
-                            tx.send(Event::Log(line.to_string())).ok();
-                        }
-                        let (status, verdict) = if r.success {
-                            ("applied", format!("✓ {} ok (exit 0)", m.name))
-                        } else {
-                            (
-                                "failed",
-                                format!("✗ {} failed (exit {:?})", m.name, r.exit_code),
-                            )
-                        };
-                        let _ = status;
-                        tx.send(Event::Status(
-                            m.name.clone(),
-                            if r.success {
-                                if action == "apply" {
-                                    "applied".into()
-                                } else {
-                                    "undone".into()
-                                }
-                            } else {
-                                "✗ failed".into()
-                            },
-                        ))
-                        .ok();
-                        tx.send(Event::Log(verdict)).ok();
-                    }
-                    Err(e) => {
-                        tx.send(Event::Status(m.name.clone(), "✗ failed".into()))
-                            .ok();
-                        tx.send(Event::Log(format!("error running {}: {e}", m.name)))
-                            .ok();
+        app.on_select_all(move |v| {
+            if let Some(app) = handle.upgrade() {
+                let model = app.get_modules();
+                for i in 0..model.row_count() {
+                    if let Some(mut row) = model.row_data(i) {
+                        row.selected = v;
+                        model.set_row_data(i, row);
                     }
                 }
             }
-            tx.send(Event::Done).ok();
         });
     }
 
     {
         let handle = handle.clone();
         let tx = tx.clone();
-        let dir = dir.clone();
+        let dir2 = dir.clone();
         let mods = discovered.clone();
-        app.on_apply_selected(move || run_modules(&handle, &tx, &dir, &mods, "apply"));
+        app.on_apply_module(move |i| run_one(&handle, &tx, &dir2, &mods, "apply", i));
     }
     {
         let handle = handle.clone();
         let tx = tx.clone();
-        let dir = dir.clone();
+        let dir2 = dir.clone();
         let mods = discovered.clone();
-        app.on_undo_selected(move || run_modules(&handle, &tx, &dir, &mods, "undo"));
+        app.on_undo_module(move |i| run_one(&handle, &tx, &dir2, &mods, "undo", i));
     }
 
     app.run().expect("slint event loop failed");

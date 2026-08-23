@@ -121,7 +121,7 @@ fn main() {
             app.set_running(true);
         }
         let tx = tx.clone();
-        let dir = dir.clone();
+        let dir: PathBuf = dir.to_path_buf();
         let selected: Vec<bazzitify::module::Module> = {
             let names: Vec<String> = handle
                 .upgrade()

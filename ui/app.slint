@@ -56,7 +56,10 @@ export component AppWindow inherits Window {
     callback select-module(int);
     callback apply-module(int);
     callback undo-module(int);
+    callback apply-selected();        // batch apply all checked modules
+    callback undo-selected();         // batch undo all checked modules (reverse order)
     callback select-all(bool);
+    callback clear-selection();       // Escape key: clear all checkboxes
     callback export-profile(string);  // profile name
     callback import-profile(string);  // profile file path
     callback load-profiles();         // refresh profile list
@@ -149,6 +152,10 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 10px;
                         spacing: 8px;
+                        CheckBox {
+                            checked <=> m.selected;
+                            enabled: !root.running;
+                        }
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
@@ -175,6 +182,22 @@ export component AppWindow inherits Window {
                     text: "dry-run";
                     checked <=> root.dry-run;
                     enabled: !root.running;
+                }
+                Rectangle { height: 8px; }
+                // Batch action buttons
+                HorizontalLayout {
+                    spacing: 6px;
+                    Button {
+                        text: "Apply Selected";
+                        primary: true;
+                        enabled: !root.running;
+                        clicked => { root.apply-selected(); }
+                    }
+                    Button {
+                        text: "Undo Selected";
+                        enabled: !root.running;
+                        clicked => { root.undo-selected(); }
+                    }
                 }
                 Text {
                     text: root.running ? "⟳ working…" : "";

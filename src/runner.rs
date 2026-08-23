@@ -144,4 +144,91 @@ mod tests {
         assert!(r.output.contains("oops"));
         fs::remove_dir_all(&dir).unwrap();
     }
+
+    #[test]
+    fn batch_apply_runs_multiple_modules_in_order() {
+        let dir = std::env::temp_dir().join(format!("bazzitify-run-{}-batch", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+
+        let m1 = Module::parse("a", "# desc: A\nmodule_apply() { echo 'apply-a'; }\n").unwrap();
+        let m2 = Module::parse("b", "# desc: B\nmodule_apply() { echo 'apply-b'; }\n").unwrap();
+        let m3 = Module::parse("c", "# desc: C\nmodule_apply() { echo 'apply-c'; }\n").unwrap();
+
+        fs::write(
+            dir.join("a.sh"),
+            "# desc: A\nmodule_apply() { echo 'apply-a'; }\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("b.sh"),
+            "# desc: B\nmodule_apply() { echo 'apply-b'; }\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("c.sh"),
+            "# desc: C\nmodule_apply() { echo 'apply-c'; }\n",
+        )
+        .unwrap();
+
+        let modules = vec![m1, m2, m3];
+        let mut outputs = Vec::new();
+        for m in &modules {
+            let r = run_module(&dir, m, "apply").unwrap();
+            assert!(r.success, "module {} failed: {}", m.name, r.output);
+            outputs.push(r.output);
+        }
+
+        // Verify each module ran and produced output
+        assert!(outputs[0].contains("apply-a"));
+        assert!(outputs[1].contains("apply-b"));
+        assert!(outputs[2].contains("apply-c"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn batch_dry_run_shows_all_modules_without_executing() {
+        let dir =
+            std::env::temp_dir().join(format!("bazzitify-run-{}-batch-dry", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+
+        let m1 = Module::parse(
+            "a",
+            "# desc: A\nmodule_apply() { echo 'apply-a'; touch /tmp/bz-batch-marker-a; }\n",
+        )
+        .unwrap();
+        let m2 = Module::parse(
+            "b",
+            "# desc: B\nmodule_apply() { echo 'apply-b'; touch /tmp/bz-batch-marker-b; }\n",
+        )
+        .unwrap();
+
+        fs::write(
+            dir.join("a.sh"),
+            "# desc: A\nmodule_apply() { echo 'apply-a'; touch /tmp/bz-batch-marker-a; }\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("b.sh"),
+            "# desc: B\nmodule_apply() { echo 'apply-b'; touch /tmp/bz-batch-marker-b; }\n",
+        )
+        .unwrap();
+
+        let _ = std::fs::remove_file("/tmp/bz-batch-marker-a");
+        let _ = std::fs::remove_file("/tmp/bz-batch-marker-b");
+
+        let modules = vec![m1, m2];
+        for m in &modules {
+            let r = run_module_opts(&dir, m, "apply", RunOpts { dry_run: true }).unwrap();
+            assert!(r.success);
+            assert!(r.output.contains("[dry-run]"));
+            assert!(r.output.contains(&format!("apply-{}", m.name)));
+        }
+
+        // Markers should not exist because dry-run doesn't execute
+        assert!(!std::path::Path::new("/tmp/bz-batch-marker-a").exists());
+        assert!(!std::path::Path::new("/tmp/bz-batch-marker-b").exists());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

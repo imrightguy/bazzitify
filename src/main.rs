@@ -505,6 +505,92 @@ fn run_gui() {
         });
     }
 
+    // Clear selection callback (Escape key)
+    {
+        let handle = handle.clone();
+        app.on_clear_selection(move || {
+            if let Some(app) = handle.upgrade() {
+                let model = app.get_modules();
+                for i in 0..model.row_count() {
+                    if let Some(mut row) = model.row_data(i) {
+                        row.selected = false;
+                        model.set_row_data(i, row);
+                    }
+                }
+            }
+        });
+    }
+
+    // Batch apply selected modules
+    {
+        let handle = handle.clone();
+        let tx = tx.clone();
+        let dir2 = dir.clone();
+        let mods = discovered.clone();
+        app.on_apply_selected(move || {
+            if let Some(app) = handle.upgrade() {
+                let model = app.get_modules();
+                let mut selected_indices = Vec::new();
+                for i in 0..model.row_count() {
+                    if let Some(row) = model.row_data(i)
+                        && row.selected
+                    {
+                        selected_indices.push(i);
+                    }
+                }
+                if !selected_indices.is_empty() {
+                    let selected_modules: Vec<Module> = selected_indices
+                        .iter()
+                        .filter_map(|&idx| mods.get(idx).cloned())
+                        .collect();
+                    spawn_worker(
+                        &handle,
+                        tx.clone(),
+                        dir2.clone(),
+                        selected_modules,
+                        "apply",
+                        app.get_dry_run(),
+                    );
+                }
+            }
+        });
+    }
+
+    // Batch undo selected modules (reverse order for dependency safety)
+    {
+        let handle = handle.clone();
+        let tx = tx.clone();
+        let dir2 = dir.clone();
+        let mods = discovered.clone();
+        app.on_undo_selected(move || {
+            if let Some(app) = handle.upgrade() {
+                let model = app.get_modules();
+                let mut selected_indices = Vec::new();
+                for i in 0..model.row_count() {
+                    if let Some(row) = model.row_data(i)
+                        && row.selected
+                    {
+                        selected_indices.push(i);
+                    }
+                }
+                if !selected_indices.is_empty() {
+                    let selected_modules: Vec<Module> = selected_indices
+                        .iter()
+                        .filter_map(|&idx| mods.get(idx).cloned())
+                        .collect();
+                    spawn_worker(
+                        &handle,
+                        tx.clone(),
+                        dir2.clone(),
+                        selected_modules,
+                        "undo",
+                        app.get_dry_run(),
+                    );
+                }
+            }
+        });
+    }
+
     {
         let handle = handle.clone();
         let tx = tx.clone();

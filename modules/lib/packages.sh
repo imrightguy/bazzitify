@@ -133,6 +133,7 @@ _resolve_arch() {
         vdpau) echo "vdpauinfo libvdpau-va-gl" ;;
         
         # Filesystems & storage
+        libdisplay-info) echo "libdisplay-info" ;;
         zram-generator) echo "zram-generator" ;;
         btrfs) echo "btrfs-progs" ;;
         fstrim) echo "util-linux" ;;
@@ -325,6 +326,7 @@ _resolve_opensuse() {
         vaapi) echo "intel-media-driver libva-utils vainfo" ;;
         vdpau) echo "vdpauinfo libvdpau_va_gl1" ;;
         
+        libdisplay-info) echo "libdisplay-info" ;;
         zram-generator) echo "zram-generator" ;;
         btrfs) echo "btrfsprogs" ;;
         fstrim) echo "util-linux" ;;
@@ -348,6 +350,10 @@ _resolve_opensuse() {
         btop) echo "btop" ;;
         neofetch) echo "neofetch" ;;
         fastfetch) echo "fastfetch" ;;
+
+        nvidia-dkms) echo "nvidia-computeG06 nvidia-gfxG06-kmp-default nvidia-glG06 nvidia-glG06-32bit" ;;
+        amd-pstate) echo "" ;;
+        intel-pstate) echo "" ;;
         *) return 1 ;;
     esac
 }

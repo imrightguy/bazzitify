@@ -11,6 +11,9 @@
 # depends: kernel-params sysctl
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
+
 MARKER="bazzitify:power-profiles"
 GOVERNOR_MARKER_FILE="/etc/default/bazzitify-governor-backup"
 
@@ -51,7 +54,7 @@ get_current_governor() {
 save_governor_backup() {
     local governor
     governor=$(get_current_governor)
-    echo "$governor" > "$GOVERNOR_MARKER_FILE"
+    echo "$governor" | sudo tee "$GOVERNOR_MARKER_FILE" >/dev/null
     echo "saved current governor ($governor) to $GOVERNOR_MARKER_FILE"
 }
 
@@ -64,7 +67,7 @@ restore_governor() {
         fi
         # Also restore via sysfs as fallback
         for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-            [ -f "$cpu" ] && echo "$governor" > "$cpu" 2>/dev/null || true
+            [ -f "$cpu" ] && echo "$governor" | sudo tee "$cpu" >/dev/null 2>&1 || true
         done
         rm -f "$GOVERNOR_MARKER_FILE"
     else
@@ -78,7 +81,7 @@ set_performance_governor() {
     fi
     # Also set via sysfs as fallback (immediate, no reboot needed)
     for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-        [ -f "$cpu" ] && echo "performance" > "$cpu" 2>/dev/null || true
+        [ -f "$cpu" ] && echo "performance" | sudo tee "$cpu" >/dev/null 2>&1 || true
     done
 }
 
@@ -194,7 +197,7 @@ remove_kernel_params() {
 configure_energy_performance_preference() {
     # Set energy_performance_preference to performance for all CPUs
     for cpu in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-        [ -f "$cpu" ] && echo "performance" > "$cpu" 2>/dev/null || true
+        [ -f "$cpu" ] && echo "performance" | sudo tee "$cpu" >/dev/null 2>&1 || true
     done
     # Also via cpupower if available
     if command -v cpupower >/dev/null 2>&1; then
@@ -205,7 +208,7 @@ configure_energy_performance_preference() {
 restore_energy_performance_preference() {
     # Restore to balanced/default
     for cpu in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-        [ -f "$cpu" ] && echo "balance_performance" > "$cpu" 2>/dev/null || true
+        [ -f "$cpu" ] && echo "balance_performance" | sudo tee "$cpu" >/dev/null 2>&1 || true
     done
     if command -v cpupower >/dev/null 2>&1; then
         sudo cpupower set -b 4 2>/dev/null || true  # balanced bias
@@ -213,22 +216,12 @@ restore_energy_performance_preference() {
 }
 
 setup_power_profiles_daemon() {
-    if command -v pacman >/dev/null 2>&1; then
-        for pkg in power-profiles-daemon; do
-            if pacman -Si "$pkg" >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm "$pkg"
-            elif command -v paru >/dev/null 2>&1; then
-                paru -S --needed --noconfirm "$pkg"
-            elif command -v yay >/dev/null 2>&1; then
-                yay -S --needed --noconfirm "$pkg"
-            else
-                echo "skip $pkg (not in repos; install an AUR helper)"
-            fi
-        done
-    else
-        echo "unsupported package manager; Arch-family only right now" >&2
+    local _pkgs
+    if ! _pkgs=$(resolve_package_list power-profiles-daemon) || [ -z "$_pkgs" ]; then
+        echo "packages not mapped for this distro; skipping install" >&2
         return 1
     fi
+    pkg_install $_pkgs
 
     # Enable and start the system service
     sudo systemctl enable --now power-profiles-daemon.service 2>/dev/null || echo "power-profiles-daemon service enable failed (may already be running)"
@@ -253,22 +246,12 @@ setup_tuned_profile() {
     local tuned_dir="/etc/tuned/bazzitify-gaming"
     local tuned_file="$tuned_dir/tuned.conf"
 
-    if command -v pacman >/dev/null 2>&1; then
-        for pkg in tuned; do
-            if pacman -Si "$pkg" >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm "$pkg"
-            elif command -v paru >/dev/null 2>&1; then
-                paru -S --needed --noconfirm "$pkg"
-            elif command -v yay >/dev/null 2>&1; then
-                yay -S --needed --noconfirm "$pkg"
-            else
-                echo "skip $pkg (not in repos; install an AUR helper)"
-            fi
-        done
-    else
-        echo "unsupported package manager; Arch-family only right now" >&2
+    local _pkgs
+    if ! _pkgs=$(resolve_package_list tuned) || [ -z "$_pkgs" ]; then
+        echo "packages not mapped for this distro; skipping install" >&2
         return 1
     fi
+    pkg_install $_pkgs
 
     # Create the tuned profile
     sudo mkdir -p "$tuned_dir"
@@ -320,22 +303,12 @@ module_apply() {
     echo "=== bazzitify power-profiles: gaming CPU optimization ==="
 
     # Install required packages
-    if command -v pacman >/dev/null 2>&1; then
-        for pkg in cpupower power-profiles-daemon tuned; do
-            if pacman -Si "$pkg" >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm "$pkg"
-            elif command -v paru >/dev/null 2>&1; then
-                paru -S --needed --noconfirm "$pkg"
-            elif command -v yay >/dev/null 2>&1; then
-                yay -S --needed --noconfirm "$pkg"
-            else
-                echo "skip $pkg (not in repos; install an AUR helper)"
-            fi
-        done
-    else
-        echo "unsupported package manager; Arch-family only right now" >&2
+    local _pkgs
+    if ! _pkgs=$(resolve_package_list cpupower power-profiles-daemon tuned) || [ -z "$_pkgs" ]; then
+        echo "packages not mapped for this distro; skipping install" >&2
         return 1
     fi
+    pkg_install $_pkgs
 
     # Detect CPU vendor
     local vendor
@@ -400,6 +373,14 @@ module_undo() {
     echo "=== power-profiles undone ==="
     echo "Governor restored, kernel params cleaned, power-profiles-daemon set to balanced, tuned profile removed."
     echo "Packages left installed; to remove:"
-    echo "  sudo pacman -Rns cpupower power-profiles-daemon tuned"
+    local pm
+    pm=$(detect_package_manager)
+    case "$pm" in
+        pacman) echo "  sudo pacman -Rns cpupower power-profiles-daemon tuned" ;;
+        zypper) echo "  sudo zypper --non-interactive remove cpupower power-profiles-daemon tuned" ;;
+        dnf)    echo "  sudo dnf remove cpupower power-profiles-daemon tuned" ;;
+        apt)    echo "  sudo apt-get remove cpupower power-profiles-daemon tuned" ;;
+        *)      echo "  (remove cpupower power-profiles-daemon tuned with your package manager)" ;;
+    esac
     echo "Reboot recommended to fully revert kernel parameters."
 }

@@ -16,8 +16,17 @@ module_apply() {
   sudo systemctl enable --now fstrim.timer && echo "fstrim.timer enabled (weekly TRIM)"
 
   # zram
-  if command -v zramctl >/dev/null 2>&1 || pacman -Qi zram-generator >/dev/null 2>&1; then
-    sudo pacman -S --needed --noconfirm zram-generator
+  if command -v pkg_install >/dev/null 2>&1; then
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
+    local zram_pkgs
+    zram_pkgs=$(resolve_package_list zram-generator)
+    if [ -n "$zram_pkgs" ]; then
+      pkg_install $zram_pkgs
+    else
+      echo "zram-generator unavailable for this distro; skipping zram"
+      return 0
+    fi
     if [ ! -f "$ZRAM_CONF" ]; then
       echo "$ZRAM_CONTENT" | sudo tee "$ZRAM_CONF" >/dev/null
       sudo systemctl daemon-reload

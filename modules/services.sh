@@ -2,12 +2,18 @@
 # desc: Services — enable gamemode/gamemoded socket, disable useless-for-gaming services
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
+
 module_apply() {
-  # GameMode daemon
-  if pacman -Qi gamemode >/dev/null 2>&1 || pacman -Si gamemode >/dev/null 2>&1; then
-    sudo pacman -S --needed --noconfirm gamemode lib32-gamemode
+  # GameMode daemon (distro-agnostic via package map)
+  local pkgs
+  if pkgs=$(resolve_package_list gamemode lib32-gamemode); [ -n "$pkgs" ]; then
+    pkg_install $pkgs
     systemctl --user enable --now gamemoded.service 2>/dev/null && echo "gamemoded enabled" \
       || echo "gamemoded socket activation only (starts on demand)"
+  else
+    echo "gamemode not mapped for this distro; skipping"
   fi
 
   # Disable common latency contributors when present but not essential

@@ -10,6 +10,9 @@
 # depends: gpu-drivers display-gpu-control
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
+
 PACMAN_PKGS=(libdisplay-info)
 BACKUP_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/bazzitify/hdr-vrr-backups"
 MARKER="# bazzitify:hdr-vrr"
@@ -166,22 +169,12 @@ configure_cosmic_hdr_vrr() {
 }
 
 module_apply() {
-  if command -v pacman >/dev/null 2>&1; then
-    for pkg in "${PACMAN_PKGS[@]}"; do
-      if pacman -Si "$pkg" >/dev/null 2>&1; then
-        sudo pacman -S --needed --noconfirm "$pkg"
-      elif command -v paru >/dev/null 2>&1; then
-        paru -S --needed --noconfirm "$pkg"
-      elif command -v yay >/dev/null 2>&1; then
-        yay -S --needed --noconfirm "$pkg"
-      else
-        echo "skip $pkg (not in repos; install an AUR helper)"
-      fi
-    done
-  else
-    echo "unsupported package manager; Arch-family only right now" >&2
+  local pkgs
+  if ! pkgs=$(resolve_package_list ${PACMAN_PKGS[*]}) || [ -z "$pkgs" ]; then
+    echo "packages not mapped for this distro; skipping install" >&2
     return 1
   fi
+  pkg_install $pkgs
 
   local comp
   comp=$(detect_compositor)
@@ -259,6 +252,7 @@ module_undo() {
   esac
 
   echo "packages left installed; to remove:"
-  echo "  sudo pacman -Rns ${PACMAN_PKGS[*]}"
+  echo "  # removal command is distro-specific; pkg_remove handles it:
+  #   (see module engine) or manually: sudo <pkg-manager remove> ${PACMAN_PKGS[*]}"
   echo "Backup directory preserved at $BACKUP_DIR (safe to delete manually)"
 }

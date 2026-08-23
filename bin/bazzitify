@@ -9,13 +9,105 @@ LOG_FILE="$STATE_DIR/applied.log"
 
 mkdir -p "$STATE_DIR"
 
+# Read all modules and their dependencies, output topological order
+# Usage: topological_order [apply|undo]
+# For apply: dependencies first
+# For undo: reverse (dependents first)
+topological_order() {
+  local action="${1:-apply}"
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' RETURN
+
+  # Create a temp file with module name and its depends
+  for f in "$MODULES_DIR"/*.sh; do
+    [[ -e "$f" ]] || continue
+    name=$(basename "$f" .sh)
+    deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    echo "$name $deps" >> "$tmpdir/deps.txt"
+  done
+
+  # Kahn's algorithm in bash
+  declare -A adj
+  declare -A indegree
+  declare -A modules
+
+  # Initialize
+  while read -r name deps; do
+    [[ -z "$name" ]] && continue
+    modules["$name"]=1
+    indegree["$name"]=0
+    adj["$name"]=""
+  done < "$tmpdir/deps.txt"
+
+  # Build graph
+  while read -r name deps; do
+    [[ -z "$name" ]] && continue
+    for dep in $deps; do
+      if [[ -z "${modules[$dep]:-}" ]]; then
+        echo "Error: module '$name' depends on unknown module '$dep'" >&2
+        exit 1
+      fi
+      adj["$dep"]="${adj[$dep]} $name"
+      indegree["$name"]=$((indegree["$name"] + 1))
+    done
+  done < "$tmpdir/deps.txt"
+
+  # Queue of nodes with indegree 0
+  local queue=()
+  for name in "${!modules[@]}"; do
+    if [[ ${indegree[$name]} -eq 0 ]]; then
+      queue+=("$name")
+    fi
+  done
+
+  local sorted=()
+  while [[ ${#queue[@]} -gt 0 ]]; do
+    local u="${queue[0]}"
+    queue=("${queue[@]:1}")
+    sorted+=("$u")
+    for v in ${adj[$u]}; do
+      indegree["$v"]=$((indegree["$v"] - 1))
+      if [[ ${indegree[$v]} -eq 0 ]]; then
+        queue+=("$v")
+      fi
+    done
+  done
+
+  if [[ ${#sorted[@]} -ne ${#modules[@]} ]]; then
+    # Cycle detected
+    local remaining=()
+    for name in "${!modules[@]}"; do
+      if [[ ${indegree[$name]} -gt 0 ]]; then
+        remaining+=("$name")
+      fi
+    done
+    echo "Error: dependency cycle detected involving: ${remaining[*]}" >&2
+    exit 1
+  fi
+
+  if [[ "$action" == "undo" ]]; then
+    # Reverse for undo
+    for ((i=${#sorted[@]}-1; i>=0; i--)); do
+      echo "${sorted[i]}"
+    done
+  else
+    printf '%s\n' "${sorted[@]}"
+  fi
+}
+
 list_modules() {
   echo "Available modules:"
   for f in "$MODULES_DIR"/*.sh; do
     [[ -e "$f" ]] || { echo "  (none yet)"; return; }
     # shellcheck disable=SC1090
     desc=$(grep -m1 '^# desc:' "$f" | cut -d: -f2- || true)
-    printf '  %-20s %s\n' "$(basename "$f" .sh)" "$desc"
+    deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+    if [[ -n "$deps" ]]; then
+      printf '  %-20s %s (depends: %s)\n' "$(basename "$f" .sh)" "$desc" "$deps"
+    else
+      printf '  %-20s %s\n' "$(basename "$f" .sh)" "$desc"
+    fi
   done
 }
 
@@ -52,15 +144,17 @@ undo_module() {
 case "${1:-}" in
   --list|-l) list_modules ;;
   --dry-run|-n)
-    echo "DRY RUN — modules that would run:"
-    list_modules ;;
+    echo "DRY RUN — modules that would run (in dependency order):"
+    topological_order apply
+    ;;
   undo)
     [[ -n "${2:-}" ]] && undo_module "$2" || echo "Usage: bazzitify undo <module>" ;;
   --all)
-    for f in "$MODULES_DIR"/*.sh; do
-      [[ -e "$f" ]] || { echo "No modules found." >&2; exit 1; }
-      run_module "$(basename "$f" .sh)"
-    done ;;
+    echo "Applying all modules in dependency order..."
+    topological_order apply | while IFS= read -r mod; do
+      run_module "$mod"
+    done
+    ;;
   "")
     echo "bazzitify — Bazzite-style gaming optimization for mutable distros"
     echo

@@ -1,5 +1,6 @@
 #!/bin/bash
 # desc: Filesystem — weekly SSD TRIM timer + zram swap config
+# depends: sysctl
 set -euo pipefail
 
 ZRAM_CONF=/etc/systemd/zram-generator.conf

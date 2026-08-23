@@ -12,6 +12,7 @@ pub struct Module {
     pub long_description: Vec<String>,
     pub has_apply: bool,
     pub has_undo: bool,
+    pub depends: Vec<String>,
 }
 
 impl Module {
@@ -37,6 +38,18 @@ impl Module {
                 }
             }
         }
+        // Dependencies: "# depends: module1 module2 ..."
+        let mut depends = Vec::new();
+        for line in source.lines() {
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("# depends:") {
+                let rest = rest.trim();
+                if !rest.is_empty() {
+                    depends = rest.split_whitespace().map(String::from).collect();
+                }
+                break; // only first # depends: line counts
+            }
+        }
         let has_apply = contains_fn(source, "module_apply");
         let has_undo = contains_fn(source, "module_undo");
         Ok(Self {
@@ -45,6 +58,7 @@ impl Module {
             long_description,
             has_apply,
             has_undo,
+            depends,
         })
     }
 
@@ -103,5 +117,86 @@ impl fmt::Display for ModuleStatus {
             ModuleStatus::Applied => write!(f, "applied"),
             ModuleStatus::Available => write!(f, "available"),
         }
+    }
+}
+
+/// Errors from module graph operations.
+#[derive(Debug, Clone)]
+pub struct GraphError(pub String);
+
+impl fmt::Display for GraphError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "module graph error: {}", self.0)
+    }
+}
+impl std::error::Error for GraphError {}
+
+/// Dependency graph for modules with topological sorting.
+pub struct ModuleGraph;
+
+impl ModuleGraph {
+    /// Topologically sort modules by their dependencies.
+    /// Returns modules in dependency order (dependencies first).
+    pub fn topological_sort(modules: &[Module]) -> Result<Vec<Module>, GraphError> {
+        // Build adjacency list and indegree map
+        let name_to_idx: std::collections::HashMap<&str, usize> = modules
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (m.name.as_str(), i))
+            .collect();
+
+        let n = modules.len();
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+        let mut indegree = vec![0; n];
+
+        // Check for missing dependencies and build graph
+        for (i, module) in modules.iter().enumerate() {
+            for dep in &module.depends {
+                let dep_idx = name_to_idx.get(dep.as_str()).ok_or_else(|| {
+                    GraphError(format!(
+                        "module '{}' depends on unknown module '{}'",
+                        module.name, dep
+                    ))
+                })?;
+                adj[*dep_idx].push(i);
+                indegree[i] += 1;
+            }
+        }
+
+        // Kahn's algorithm
+        let mut queue: std::collections::VecDeque<usize> =
+            (0..n).filter(|&i| indegree[i] == 0).collect();
+        let mut result = Vec::with_capacity(n);
+
+        while let Some(u) = queue.pop_front() {
+            result.push(modules[u].clone());
+            for &v in &adj[u] {
+                indegree[v] -= 1;
+                if indegree[v] == 0 {
+                    queue.push_back(v);
+                }
+            }
+        }
+
+        if result.len() != n {
+            // Cycle detected - find and report it
+            let remaining: Vec<&str> = (0..n)
+                .filter(|&i| indegree[i] > 0)
+                .map(|i| modules[i].name.as_str())
+                .collect();
+            return Err(GraphError(format!(
+                "dependency cycle detected involving: {}",
+                remaining.join(", ")
+            )));
+        }
+
+        Ok(result)
+    }
+
+    /// Reverse topological sort for undo operations (dependents first).
+    pub fn reverse_topological_sort(modules: &[Module]) -> Result<Vec<Module>, GraphError> {
+        let mut sorted = Self::topological_sort(modules)?;
+        sorted.reverse();
+        Ok(sorted)
     }
 }

@@ -1,5 +1,6 @@
 //! bazzitify GUI — Slint frontend over the module engine.
 
+use bazzitify::module::ModuleGraph;
 use slint::Model;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -61,7 +62,35 @@ fn spawn_worker(
             tx.send(Event::Done).ok();
             return;
         }
-        for m in &selected {
+
+        // Sort selected modules by dependency order
+        let sorted = if action == "undo" {
+            ModuleGraph::reverse_topological_sort(&selected)
+        } else {
+            ModuleGraph::topological_sort(&selected)
+        };
+
+        let sorted = match sorted {
+            Ok(m) => m,
+            Err(e) => {
+                tx.send(Event::Log(format!("dependency error: {e}"))).ok();
+                tx.send(Event::Done).ok();
+                return;
+            }
+        };
+
+        // Dry-run: show planned execution order
+        if dry_run {
+            let order: Vec<String> = sorted.iter().map(|m| m.name.clone()).collect();
+            tx.send(Event::Log(format!(
+                "DRY RUN — planned {} order: {}",
+                action,
+                order.join(" → ")
+            )))
+            .ok();
+        }
+
+        for m in &sorted {
             if matches!(action, "undo") && !m.has_undo {
                 tx.send(Event::Log(format!(
                     "[{action}:{}] no undo function; skipped",

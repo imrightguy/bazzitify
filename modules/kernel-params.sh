@@ -1,5 +1,6 @@
 #!/bin/bash
 # desc: Kernel params — nowatchdog, split_lock_detect=off, amdgpu overrides (bootloader-aware)
+# depends: gpu-drivers sysctl
 set -euo pipefail
 
 MARKER="bazzitify"

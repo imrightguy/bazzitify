@@ -68,10 +68,13 @@ export component AppWindow inherits Window {
         root.log-text += line + "\n";
     }
 
-    HorizontalLayout {
+    VerticalLayout {
+        spacing: 0;
+
+        HorizontalLayout {
         // ── Sidebar nav (COSMIC-style) ──
         Rectangle {
-            width: 220px;
+            width: 230px;
             background: #181825;
             VerticalLayout {
                 padding: 10px;
@@ -89,7 +92,7 @@ export component AppWindow inherits Window {
                     color: #a6adc8;
                 }
 
-                Rectangle { height: 6px; }
+                Rectangle { height: 4px; }
 
                 // Profile management toolbar
                 HorizontalLayout {
@@ -209,6 +212,7 @@ export component AppWindow inherits Window {
 
         // ── Main pane ──
         Rectangle {
+            horizontal-stretch: 1;
             background: #1e1e2e;
             if root.current-page < 0: ScrollView {
                 VerticalLayout {
@@ -325,24 +329,35 @@ export component AppWindow inherits Window {
                 }
             }
         }
-    }
-
-    // ── Log strip along the bottom, always visible ──
-    Rectangle {
-        height: 160px;
-        background: #181825;
-        Rectangle {
-            height: 1px;
-            background: #313244;
         }
-        ScrollView {
-            Text {
-                text: root.log-text;
-                color: #cdd6f4;
-                font-family: "monospace";
-                font-size: 11px;
-                wrap: word-wrap;
+        } // end HorizontalLayout (sidebar + main)
+
+        // ── Log strip along the bottom, always visible ──
+        Rectangle {
+            height: 150px;
+            background: #181825;
+            VerticalLayout {
+                spacing: 0;
+                Rectangle { height: 1px; background: #313244; }
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-top: 4px;
+                    Text {
+                        text: "log";
+                        font-size: 10px;
+                        color: #6c7086;
+                    }
+                }
+                ScrollView {
+                    padding: 0;
+                    Text {
+                        text: root.log-text;
+                        color: #cdd6f4;
+                        font-family: "monospace";
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+                }
             }
         }
     }
-}

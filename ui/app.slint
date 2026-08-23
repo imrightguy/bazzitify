@@ -1,4 +1,4 @@
-import { Button, CheckBox, ScrollView } from "std-widgets.slint";
+import { Button, CheckBox, ScrollView, ComboBox } from "std-widgets.slint";
 
 export struct ModuleInfo {
     name: string,
@@ -50,11 +50,16 @@ export component AppWindow inherits Window {
     in property <bool> running;
     in property <string> distro-info;
     in-out property <bool> dry-run;
+    in-out property <[string]> profiles;  // list of available profile names
+    in-out property <string> selected-profile;
 
     callback select-module(int);
     callback apply-module(int);
     callback undo-module(int);
     callback select-all(bool);
+    callback export-profile(string);  // profile name
+    callback import-profile(string);  // profile file path
+    callback load-profiles();         // refresh profile list
 
     public function append-log(line: string) {
         root.log-text += line + "\n";
@@ -79,6 +84,41 @@ export component AppWindow inherits Window {
                     text: root.distro-info;
                     font-size: 10px;
                     color: #a6adc8;
+                }
+
+                Rectangle { height: 6px; }
+
+                // Profile management toolbar
+                HorizontalLayout {
+                    spacing: 6px;
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    ComboBox {
+                        horizontal-stretch: 1;
+                        model: root.profiles;
+                        current-index: -1;
+                        // TODO: need to handle selection - we'll use a separate approach
+                    }
+                    Button {
+                        text: "Export";
+                        enabled: !root.running;
+                        clicked => {
+                            // Prompt for name via dialog - for now use a fixed approach
+                            root.export-profile(root.selected-profile);
+                        }
+                    }
+                    Button {
+                        text: "Import";
+                        enabled: !root.running;
+                        clicked => {
+                            root.import-profile("");
+                        }
+                    }
+                    Button {
+                        text: "Refresh";
+                        enabled: !root.running;
+                        clicked => { root.load-profiles(); }
+                    }
                 }
 
                 Rectangle { height: 6px; }
@@ -265,4 +305,22 @@ export component AppWindow inherits Window {
     }
 
     // ── Log strip along the bottom, always visible ──
+    Rectangle {
+        height: 160px;
+        background: #181825;
+        Rectangle {
+            height: 1px;
+            background: #313244;
+        }
+        ScrollView {
+            Text {
+                text: root.log-text;
+                color: #cdd6f4;
+                font-family: "monospace";
+                font-size: 11px;
+                padding: 8px;
+                wrap: word-wrap;
+            }
+        }
+    }
 }

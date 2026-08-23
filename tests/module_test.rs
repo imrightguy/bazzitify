@@ -203,9 +203,15 @@ fn status_display_is_readable() {
 fn discovers_hdr_vrr_module() {
     let dir = std::path::Path::new("modules");
     let mods = bazzitify::module::Module::discover(dir).unwrap();
-    let hdr = mods.iter().find(|m| m.name == "hdr-vrr").expect("hdr-vrr module should be discovered");
+    let hdr = mods
+        .iter()
+        .find(|m| m.name == "hdr-vrr")
+        .expect("hdr-vrr module should be discovered");
     assert!(hdr.description.is_some(), "hdr-vrr should have description");
-    assert!(!hdr.long_description.is_empty(), "hdr-vrr should have long description");
+    assert!(
+        !hdr.long_description.is_empty(),
+        "hdr-vrr should have long description"
+    );
     assert!(hdr.has_apply, "hdr-vrr should have module_apply");
     assert!(hdr.has_undo, "hdr-vrr should have module_undo");
     assert_eq!(hdr.depends, vec!["gpu-drivers", "display-gpu-control"]);

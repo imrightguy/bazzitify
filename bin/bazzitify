@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # bazzitify — main entry point
 
 set -euo pipefail
@@ -6,8 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/../modules"
 STATE_DIR="$HOME/.local/state/bazzitify"
 LOG_FILE="$STATE_DIR/applied.log"
+CONFIG_DIR="$HOME/.config/bazzitify/profiles"
 
 mkdir -p "$STATE_DIR"
+mkdir -p "$CONFIG_DIR"
 
 # Read all modules and their dependencies, output topological order
 # Usage: topological_order [apply|undo]
@@ -141,6 +144,26 @@ undo_module() {
   fi
 }
 
+# Profile subcommands
+profile_export() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || { echo "Usage: bazzitify profile export <name>" >&2; exit 1; }
+
+  # Use the Rust binary for profile operations
+  "$SCRIPT_DIR/bazzitify-profile" export "$name"
+}
+
+profile_import() {
+  local file="${1:-}"
+  [[ -n "$file" ]] || { echo "Usage: bazzitify profile import <file>" >&2; exit 1; }
+
+  "$SCRIPT_DIR/bazzitify-profile" import "$file"
+}
+
+profile_list() {
+  "$SCRIPT_DIR/bazzitify-profile" list
+}
+
 case "${1:-}" in
   --list|-l) list_modules ;;
   --dry-run|-n)
@@ -155,10 +178,19 @@ case "${1:-}" in
       run_module "$mod"
     done
     ;;
+  profile)
+    subcmd="${2:-}"
+    case "$subcmd" in
+      export) profile_export "${3:-}" ;;
+      import) profile_import "${3:-}" ;;
+      list) profile_list ;;
+      *) echo "Usage: bazzitify profile <export|import|list>" >&2; exit 1 ;;
+    esac
+    ;;
   "")
     echo "bazzitify — Bazzite-style gaming optimization for mutable distros"
     echo
-    echo "Usage: bazzitify <module|--all|--list|--dry-run|undo <module>>"
+    echo "Usage: bazzitify <module|--all|--list|--dry-run|undo <module>|profile <export|import|list>>"
     echo
     list_modules ;;
   *) run_module "$1" "${@:2}" ;;

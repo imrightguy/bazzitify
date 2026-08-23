@@ -10,39 +10,58 @@ export struct ModuleInfo {
 export component AppWindow inherits Window {
     title: "bazzitify";
     min-width: 720px;
-    min-height: 480px;
+    min-height: 520px;
     background: #1e1e2e;
 
     in property <[ModuleInfo]> modules;
-    in property <string> log-text;
+    in-out property <string> log-text;
     in property <bool> running;
+    in property <string> distro-info;
 
     callback apply-selected();
     callback undo-selected();
+    callback select-all(bool);
+
+    public function append-log(line: string) {
+        root.log-text += line + "\n";
+    }
 
     VerticalLayout {
         padding: 12px;
         spacing: 8px;
 
-        Text {
-            text: "bazzitify — Bazzite-style gaming optimization";
-            font-size: 18px;
-            color: #cdd6f4;
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: "bazzitify";
+                font-size: 18px;
+                font-weight: 800;
+                color: #cba6f7;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.distro-info;
+                font-size: 12px;
+                color: #a6adc8;
+                vertical-alignment: center;
+            }
+            Rectangle {}
         }
 
         ScrollView {
             VerticalLayout {
                 spacing: 4px;
                 for m in modules: Rectangle {
-                    height: 44px;
+                    height: 48px;
                     border-radius: 6px;
-                    background: #313244;
+                    background: m.selected ? #45475a : #313244;
                     HorizontalLayout {
                         padding: 8px;
                         spacing: 8px;
                         alignment: start;
                         CheckBox {
                             checked <=> m.selected;
+                            toggled => {}
                         }
                         VerticalLayout {
                             alignment: center;
@@ -51,10 +70,13 @@ export component AppWindow inherits Window {
                         }
                         Rectangle {
                             horizontal-stretch: 0;
+                            vertical-stretch: 0;
+                            width: 80px;
                             Text {
                                 text: m.status;
-                                color: #a6e3a1;
+                                color: m.status == "applied" ? #a6e3a1 : (m.status == "running" ? #f9e2af : #9399b2);
                                 vertical-alignment: center;
+                                horizontal-alignment: right;
                             }
                         }
                     }
@@ -63,11 +85,11 @@ export component AppWindow inherits Window {
         }
 
         Rectangle {
-            background: #181825;
+            background: #11111b;
             border-radius: 6px;
             ScrollView {
                 Text {
-                    text: log-text;
+                    text: root.log-text == "" ? "— output will appear here —" : root.log-text;
                     color: #94e2d5;
                     font-family: "monospace";
                     font-size: 11px;
@@ -78,15 +100,34 @@ export component AppWindow inherits Window {
 
         HorizontalLayout {
             spacing: 8px;
+            alignment: start;
+            Button {
+                text: "Select All";
+                clicked => { root.select-all(true); }
+            }
+            Button {
+                text: "Clear Selection";
+                clicked => { root.select-all(false); }
+            }
+            Rectangle {}
+            if root.running: Text {
+                text: "⟳ working…";
+                color: #f9e2af;
+                vertical-alignment: center;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
             alignment: end;
             Button {
                 text: "Undo Selected";
-                enabled: !running;
+                enabled: !root.running;
                 clicked => { root.undo-selected(); }
             }
             Button {
                 text: "Apply Selected";
-                enabled: !running;
+                enabled: !root.running;
                 primary: true;
                 clicked => { root.apply-selected(); }
             }

@@ -49,6 +49,7 @@ export component AppWindow inherits Window {
     in-out property <string> log-text;
     in property <bool> running;
     in property <string> distro-info;
+    in-out property <bool> dry-run;
 
     callback select-module(int);
     callback apply-module(int);
@@ -130,6 +131,11 @@ export component AppWindow inherits Window {
                 }
 
                 Rectangle {}
+                CheckBox {
+                    text: "dry-run";
+                    checked <=> root.dry-run;
+                    enabled: !root.running;
+                }
                 Text {
                     text: root.running ? "⟳ working…" : "";
                     color: #f9e2af;

@@ -36,12 +36,10 @@ enum Event {
 fn set_module_status(app: &AppWindow, name: &str, status: &str) {
     let model = app.get_modules();
     for i in 0..model.row_count() {
-        if let Some(mut row) = model.row_data(i) {
-            if row.name == name {
-                row.status = status.into();
-                model.set_row_data(i, row);
-                break;
-            }
+        if let Some(mut row) = model.row_data(i).filter(|r| r.name == name) {
+            row.status = status.into();
+            model.set_row_data(i, row);
+            break;
         }
     }
 }
@@ -52,6 +50,7 @@ fn spawn_worker(
     dir: PathBuf,
     selected: Vec<bazzitify::module::Module>,
     action: &'static str,
+    dry_run: bool,
 ) {
     if let Some(app) = handle.upgrade() {
         app.set_running(true);
@@ -83,7 +82,12 @@ fn spawn_worker(
                 .ok();
             tx.send(Event::Log(format!("── {action} {} ──", m.name)))
                 .ok();
-            match bazzitify::runner::run_module(&dir, m, action) {
+            match bazzitify::runner::run_module_opts(
+                &dir,
+                m,
+                action,
+                bazzitify::runner::RunOpts { dry_run },
+            ) {
                 Ok(r) => {
                     for line in r.output.lines() {
                         tx.send(Event::Log(line.to_string())).ok();
@@ -132,12 +136,14 @@ fn run_one(
     }
     let idx = index as usize;
     let Some(m) = mods.get(idx) else { return };
+    let dry = handle.upgrade().map(|a| a.get_dry_run()).unwrap_or(false);
     spawn_worker(
         handle,
         tx.clone(),
         dir.to_path_buf(),
         vec![m.clone()],
         action,
+        dry,
     );
 }
 

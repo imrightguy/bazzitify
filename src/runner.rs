@@ -16,15 +16,43 @@ pub struct RunResult {
 /// Run `module_apply` (or `module_undo`) for the given module script.
 ///
 /// `action` is "apply" or "undo". Output (stdout+stderr merged) is captured.
+/// With `dry_run`, the module body is printed instead of executed: every
+/// line of the requested function is echoed with a `[dry-run]` prefix and
+/// nothing is run.
 pub fn run_module(modules_dir: &Path, module: &Module, action: &str) -> std::io::Result<RunResult> {
+    run_module_opts(modules_dir, module, action, RunOpts::default())
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RunOpts {
+    pub dry_run: bool,
+}
+
+pub fn run_module_opts(
+    modules_dir: &Path,
+    module: &Module,
+    action: &str,
+    opts: RunOpts,
+) -> std::io::Result<RunResult> {
     let script = modules_dir.join(format!("{}.sh", module.name));
-    let mut child = Command::new("bash")
-        .arg("-c")
-        .arg(format!(
-            "source {script:?}; module_{action} \"$@\"",
+    let inner = format!(
+        "source {script:?}; module_{action} \"$@\"",
+        script = script,
+        action = action
+    );
+    let cmd_str = if opts.dry_run {
+        // Print the function body without executing it.
+        format!(
+            "source {script:?}; declare -f module_{action} | sed 's/^/[dry-run] /'",
             script = script,
             action = action
-        ))
+        )
+    } else {
+        inner
+    };
+    let mut child = Command::new("bash")
+        .arg("-c")
+        .arg(&cmd_str)
         .arg("bazzitify")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -86,6 +114,21 @@ mod tests {
         let r = run_module(&dir, &m, "apply").unwrap();
         assert!(r.success);
         assert!(r.output.contains("ran-ok"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn dry_run_prints_body_without_executing() {
+        let (dir, m) = temp_module(
+            "touchy",
+            "#!/bin/bash\nmodule_apply() { echo SHOULD-NOT-RUN; touch /tmp/bz-dryrun-marker; }\n",
+        );
+        let _ = std::fs::remove_file("/tmp/bz-dryrun-marker");
+        let r = run_module_opts(&dir, &m, "apply", RunOpts { dry_run: true }).unwrap();
+        assert!(r.success);
+        assert!(r.output.contains("[dry-run]"));
+        assert!(r.output.contains("SHOULD-NOT-RUN")); // body shown…
+        assert!(!std::path::Path::new("/tmp/bz-dryrun-marker").exists()); // …not run
         fs::remove_dir_all(&dir).unwrap();
     }
 

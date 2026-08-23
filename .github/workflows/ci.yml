@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Slint needs system deps for the femtovg/winit stack on ubuntu runners
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev libgbm-dev libxkbcommon-dev \
+            libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libudev-dev
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: build
+        run: cargo build --locked
+
+      - name: test
+        run: cargo test
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: bash syntax (modules)
+        run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done

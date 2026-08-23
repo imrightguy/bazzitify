@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  APPIMAGE_ARCH: x86_64
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev libgbm-dev libxkbcommon-dev \
+            libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libudev-dev \
+            file desktop-file-utils
+
+      - name: Build release binaries
+        run: cargo build --release --locked
+
+      - name: Stage AppDir
+        run: |
+          APPDIR=AppDir
+          install -Dm755 target/release/bazzitify        "$APPDIR/usr/bin/bazzitify"
+          install -Dm755 target/release/bazzitify-profile "$APPDIR/usr/bin/bazzitify-profile"
+
+          # .desktop + icon (AppImage requirements)
+          install -Dm644 packaging/bazzitify.desktop "$APPDIR/usr/share/applications/bazzitify.desktop"
+          install -Dm644 packaging/bazzitify.desktop "$APPDIR/bazzitify.desktop"
+          install -Dm644 packaging/bazzitify.png     "$APPDIR/bazzitify.png"
+          install -Dm644 packaging/bazzitify.png     "$APPDIR/usr/share/icons/hicolor/256x256/apps/bazzitify.png"
+
+      - name: Download linuxdeploy
+        run: |
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
+
+      - name: Build AppImage
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ./linuxdeploy --appdir AppDir --output appimage
+          mv Bazzitify-${VERSION}-x86_64.AppImage bazzitify-${VERSION}-x86_64.AppImage || true
+          ls -la *.AppImage
+
+      - name: Smoke test binary
+        run: |
+          ./target/release/bazzitify-profile list | head -5
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bazzitify-*-x86_64.AppImage
+          generate_release_notes: true

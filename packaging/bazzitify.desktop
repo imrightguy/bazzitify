@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Bazzitify
+GenericName=Gaming Optimization Tool
+Comment=Bazzite's gaming optimizations without the immutability
+Exec=bazzitify
+Icon=bazzitify
+Terminal=false
+Categories=System;Game;
+Keywords=gaming;tweaks;performance;bazzite;
+StartupNotify=true

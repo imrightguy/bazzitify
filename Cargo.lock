@@ -527,6 +527,7 @@ dependencies = [
  "chrono",
  "dirs",
  "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "tempfile",

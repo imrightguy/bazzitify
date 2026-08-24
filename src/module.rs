@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 
 /// A single tweakable unit backed by a bash script with `module_apply` / `module_undo`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Module {
     pub name: String,
     pub description: Option<String>,
@@ -118,7 +118,7 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 /// Whether a module has been applied on this system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum ModuleStatus {
     Applied,
     Available,

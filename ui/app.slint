@@ -8,85 +8,58 @@ export struct ModuleInfo {
     status: string,
 }
 
-// Sidebar nav row: hover highlight, selected state, optional trailing widget.
+// ── Palette ──
+global Palette {
+    out property <color> base: #1e1e2e;
+    out property <color> panel: #181825;
+    out property <color> surface: #313244;
+    out property <color> overlay: #45475a;
+    out property <color> text: #cdd6f4;
+    out property <color> subtext: #a6adc8;
+    out property <color> faint: #6c7086;
+    out property <color> accent: #cba6f7;
+    out property <color> green: #a6e3a1;
+    out property <color> red: #f38ba8;
+    out property <color> yellow: #f9e2af;
+}
+
+// Sidebar nav row: hover highlight, selected state, optional trailing pill.
 component NavItem inherits Rectangle {
     in property <string> label;
     in property <bool> selected;
-    in property <string> status-mark: "";
-    in property <bool> mark-ok: true;
-    callback activated();
-    height: 34px;
-    border-radius: 6px;
-
     ta := TouchArea {
         clicked => { root.activated(); }
         mouse-cursor: pointer;
     }
-    background: root.selected ? #45475a : (ta.has-hover ? #313244 : transparent);
+    background: root.selected ? Palette.overlay : (ta.has-hover ? Palette.surface : transparent);
+    height: 32px;
+    border-radius: 6px;
 
     HorizontalLayout {
         padding-left: 10px;
-        padding-right: 8px;
-        spacing: 8px;
         Text {
             text: root.label;
-            color: #cdd6f4;
+            color: Palette.text;
             font-size: 13px;
             vertical-alignment: center;
-            vertical-stretch: 1;
             overflow: elide;
         }
-        Rectangle { horizontal-stretch: 1; }
-        if root.status-mark != "": Rectangle {
-            width: 20px;
-            border-radius: 9px;
-            background: root.mark-ok ? #a6e3a133 : #f38ba833;
-            Text {
-                text: root.status-mark;
-                color: root.mark-ok ? #a6e3a1 : #f38ba8;
-                font-size: 11px;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
     }
+    callback activated();
 }
 
-// One settings-style item row: title + description left, control right.
-component SettingsItem inherits Rectangle {
-    in property <string> item-title;
-    in property <string> item-desc;
-    in property <bool> highlighted;
-    height: 56px;
-    border-radius: 6px;
-    background: root.highlighted ? #45475a : #313244;
-
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 10px;
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 1;
-            Text {
-                text: item-title;
-            }
-            Text {
-                text: item-desc;
-                color: #a6adc8;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
-        }
-        @children
-    }
-}
 
 export component AppWindow inherits Window {
     title: "bazzitify";
-    min-width: 860px;
-    min-height: 560px;
-    background: #1e1e2e;
+    min-width: 760px;
+    min-height: 500px;
+    preferred-width: 1150px;
+    preferred-height: 740px;
+    background: Palette.base;
+
+    // Resizable panes
+    in-out property <length> sidebar-width: 250px;
+    in-out property <length> log-height: 170px;
 
     in property <[ModuleInfo]> modules;
     in-out property <int> current-page;   // index into modules; -1 = overview
@@ -94,19 +67,19 @@ export component AppWindow inherits Window {
     in property <bool> running;
     in property <string> distro-info;
     in-out property <bool> dry-run;
-    in-out property <[string]> profiles;  // list of available profile names
+    in-out property <[string]> profiles;
     in-out property <string> selected-profile;
 
     callback select-module(int);
     callback apply-module(int);
     callback undo-module(int);
-    callback apply-selected();        // batch apply all checked modules
-    callback undo-selected();         // batch undo all checked modules (reverse order)
+    callback apply-selected();
+    callback undo-selected();
     callback select-all(bool);
-    callback clear-selection();       // Escape key: clear all checkboxes
-    callback export-profile(string);  // profile name
-    callback import-profile(string);  // profile file path
-    callback load-profiles();         // refresh profile list
+    callback clear-selection();
+    callback export-profile(string);
+    callback import-profile(string);
+    callback load-profiles();
 
     public function append-log(line: string) {
         root.log-text += line + "\n";
@@ -116,288 +89,368 @@ export component AppWindow inherits Window {
         spacing: 0;
 
         HorizontalLayout {
-        // ── Sidebar nav (COSMIC-style) ──
-        Rectangle {
-            width: 230px;
-            background: #181825;
-            VerticalLayout {
-                padding: 10px;
-                spacing: 6px;
+            spacing: 0;
 
-                Text {
-                    text: "bazzitify";
-                    font-size: 17px;
-                    font-weight: 800;
-                    color: #cba6f7;
-                }
-                Text {
-                    text: root.distro-info;
-                    font-size: 10px;
-                    color: #a6adc8;
-                }
+            // ── Sidebar ──
+            Rectangle {
+                width: root.sidebar-width;
+                background: Palette.panel;
 
-                Rectangle { height: 4px; }
-
-                // Profile management toolbar
-                HorizontalLayout {
-                    spacing: 6px;
-                    padding-left: 4px;
-                    padding-right: 4px;
-                    ComboBox {
-                        horizontal-stretch: 1;
-                        model: root.profiles;
-                        current-index: -1;
-                        // TODO: need to handle selection - we'll use a separate approach
-                    }
-                    Button {
-                        text: "Export";
-                        enabled: !root.running;
-                        clicked => {
-                            // Prompt for name via dialog - for now use a fixed approach
-                            root.export-profile(root.selected-profile);
-                        }
-                    }
-                    Button {
-                        text: "Import";
-                        enabled: !root.running;
-                        clicked => {
-                            root.import-profile("");
-                        }
-                    }
-                    Button {
-                        text: "Refresh";
-                        enabled: !root.running;
-                        clicked => { root.load-profiles(); }
-                    }
-                }
-
-                Rectangle { height: 6px; }
-
-                // Overview page
-                NavItem {
-                    label: "Overview";
-                    selected: root.current-page < 0;
-                    activated => { root.select-module(-1); }
-                }
-
-                // Module pages
-                for m[i] in modules: Rectangle {
-                    height: 34px;
-                    border-radius: 6px;
-                    background: root.current-page == i ? #45475a : (row-ta.has-hover ? #313244 : transparent);
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 8px;
-                        spacing: 8px;
-                        CheckBox {
-                            checked <=> m.selected;
-                            enabled: !root.running;
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            Text {
-                                text: m.name;
-                                color: #cdd6f4;
-                                font-size: 13px;
-                                font-weight: 600;
-                                overflow: elide;
-                            }
-                        }
-                        if m.status != "": Rectangle {
-                            width: 22px;
-                            border-radius: 10px;
-                            background: m.status == "applied" ? #a6e3a133 : #f38ba833;
-                            Text {
-                                text: m.status == "applied" ? "✓" : "✗";
-                                color: m.status == "applied" ? #a6e3a1 : #f38ba8;
-                                font-size: 11px;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-                    row-ta := TouchArea {
-                        clicked => { root.select-module(i); }
-                        mouse-cursor: pointer;
-                    }
-                }
-
-                Rectangle {}
-                CheckBox {
-                    text: "dry-run";
-                    checked <=> root.dry-run;
-                    enabled: !root.running;
-                }
-                Rectangle { height: 8px; }
-                // Batch action buttons
-                HorizontalLayout {
-                    spacing: 6px;
-                    Button {
-                        text: "Apply Selected";
-                        primary: true;
-                        enabled: !root.running;
-                        clicked => { root.apply-selected(); }
-                    }
-                    Button {
-                        text: "Undo Selected";
-                        enabled: !root.running;
-                        clicked => { root.undo-selected(); }
-                    }
-                }
-                Text {
-                    text: root.running ? "⟳ working…" : "";
-                    color: #f9e2af;
-                    font-size: 11px;
-                }
-            }
-        }
-
-        // ── Main pane ──
-        Rectangle {
-            horizontal-stretch: 1;
-            background: #1e1e2e;
-            if root.current-page < 0: ScrollView {
                 VerticalLayout {
-                    padding: 16px;
+                    padding: 12px;
                     spacing: 8px;
 
                     Text {
-                        text: "Modules";
-                        font-size: 20px;
-                        font-weight: 700;
-                        color: #cdd6f4;
+                        text: "bazzitify";
+                        font-size: 18px;
+                        font-weight: 800;
+                        color: Palette.accent;
                     }
                     Text {
-                        text: "Select a module in the sidebar to see what it does before applying. Applied state is per-session.";
-                        color: #a6adc8;
-                        font-size: 12px;
-                        wrap: word-wrap;
+                        text: root.distro-info;
+                        font-size: 10px;
+                        color: Palette.faint;
                     }
 
-                    Rectangle { height: 6px; }
+                    Rectangle { height: 2px; }
 
-                    for m[i] in modules: SettingsItem {
-                        item-title: m.name;
-                        item-desc: m.description;
-                        highlighted: root.current-page == i;
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: end;
-                            Button {
-                                text: "Open";
-                                clicked => { root.select-module(i); }
-                            }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Button {
+                            text: "Export";
+                            enabled: !root.running;
+                            clicked => { root.export-profile(root.selected-profile); }
+                        }
+                        Button {
+                            text: "Import";
+                            enabled: !root.running;
+                            clicked => { root.import-profile(""); }
+                        }
+                        Button {
+                            text: "Refresh";
+                            enabled: !root.running;
+                            clicked => { root.load-profiles(); }
                         }
                     }
-                }
-        }
 
-            if root.current-page >= 0 && root.current-page < modules.length: Rectangle {
-                property <ModuleInfo> mod: modules[root.current-page];
+                    Rectangle { height: 4px; }
 
-                ScrollView {
-                    VerticalLayout {
-                        padding: 16px;
-                        spacing: 10px;
+                    NavItem {
+                        label: "Overview";
+                        selected: root.current-page < 0;
+                        activated => { root.select-module(-1); }
+                    }
 
+                    for m[i] in modules: Rectangle {
+                        height: 34px;
+                        border-radius: 6px;
+                        background: root.current-page == i ? Palette.overlay : (row-ta.has-hover ? Palette.surface : transparent);
                         HorizontalLayout {
-                            spacing: 10px;
-                            Text {
-                                text: mod.name;
-                                font-size: 20px;
-                                font-weight: 700;
-                                color: #cdd6f4;
-                            }
-                            Rectangle {
-                                border-radius: 4px;
-                                background: mod.status == "applied" ? #a6e3a155 : (mod.status == "running…" ? #f9e2af55 : #313244);
-                                width: 90px;
-                                height: 24px;
-                                Text {
-                                    text: mod.status;
-                                    color: #cdd6f4;
-                                    font-size: 11px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                            Rectangle {}
+                            padding-left: 8px;
+                            padding-right: 6px;
+                            spacing: 8px;
                             CheckBox {
-                                text: "select";
-                                checked <=> mod.selected;
+                                checked <=> m.selected;
                                 enabled: !root.running;
                             }
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: m.name;
+                                    color: Palette.text;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    overflow: elide;
+                                }
+                            }
+                            if m.status == "applied": Rectangle {
+                                width: 20px;
+                                border-radius: 10px;
+                                background: #a6e3a133;
+                                Text { text: "✓"; color: Palette.green; font-size: 11px;
+                                       horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            if m.status != "" && m.status != "applied": Rectangle {
+                                width: 20px;
+                                border-radius: 10px;
+                                background: #f38ba833;
+                                Text { text: "✗"; color: Palette.red; font-size: 11px;
+                                       horizontal-alignment: center; vertical-alignment: center; }
+                            }
                         }
+                        row-ta := TouchArea {
+                            clicked => { root.select-module(i); }
+                            mouse-cursor: pointer;
+                        }
+                    }
+
+                    Rectangle { vertical-stretch: 1; }
+
+                    CheckBox {
+                        text: "dry-run";
+                        checked <=> root.dry-run;
+                        enabled: !root.running;
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Button {
+                            text: "Apply Selected";
+                            primary: true;
+                            enabled: !root.running;
+                            clicked => { root.apply-selected(); }
+                        }
+                        Button {
+                            text: "Undo Selected";
+                            enabled: !root.running;
+                            clicked => { root.undo-selected(); }
+                        }
+                    }
+                    Text {
+                        text: root.running ? "⟳ working…" : "";
+                        color: Palette.yellow;
+                        font-size: 11px;
+                    }
+                }
+            }
+
+            // ── Sidebar resize handle ──
+            Rectangle {
+                width: 5px;
+                background: split-ta.has-hover || split-ta.pressed ? Palette.accent : transparent;
+                split-ta := TouchArea {
+                    property <length> start-width;
+                    property <length> press-x;
+                    pointer-event(ev) => {
+                        if ev.kind == PointerEventKind.down {
+                            self.start-width = root.sidebar-width;
+                            self.press-x = self.mouse-x;
+                        }
+                    }
+                    moved => {
+                        root.sidebar-width = Math.max(200px, Math.min(420px,
+                            self.start-width + (self.mouse-x - self.press-x)));
+                    }
+                    mouse-cursor: col-resize;
+                }
+            }
+
+            // ── Main pane ──
+            Rectangle {
+                horizontal-stretch: 1;
+                background: Palette.base;
+
+                if root.current-page < 0: ScrollView {
+                    VerticalLayout {
+                        padding: 24px;
+                        spacing: 10px;
 
                         Text {
-                            text: mod.description;
-                            color: #a6adc8;
+                            text: "Modules";
+                            font-size: 22px;
+                            font-weight: 800;
+                            color: Palette.text;
+                        }
+                        Text {
+                            text: "Select a module in the sidebar to see what it does before applying.";
+                            color: Palette.subtext;
                             font-size: 13px;
-                        }
-
-                        Rectangle { height: 4px; }
-
-                        Text {
-                            text: "What this module does";
-                            font-size: 14px;
-                            font-weight: 600;
-                            color: #cba6f7;
-                        }
-                        Text {
-                            text: mod.details;
-                            color: #cdd6f4;
-                            font-size: 12px;
                             wrap: word-wrap;
                         }
 
                         Rectangle { height: 8px; }
 
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: end;
-                            Button {
-                                text: "Undo";
-                                enabled: !root.running;
-                                clicked => { root.undo-module(root.current-page); }
+                        for m[i] in modules: Rectangle {
+                            height: 64px;
+                            border-radius: 8px;
+                            row-hover := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.select-module(i); }
                             }
-                            Button {
-                                text: "Apply";
-                                primary: true;
-                                enabled: !root.running;
-                                clicked => { root.apply-module(root.current-page); }
+                            background: row-hover.has-hover ? Palette.overlay : Palette.surface;
+                            HorizontalLayout {
+                                padding-left: 14px;
+                                padding-right: 14px;
+                                spacing: 12px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    spacing: 2px;
+                                    Text {
+                                        text: m.name;
+                                        color: Palette.text;
+                                        font-size: 14px;
+                                        font-weight: 600;
+                                    }
+                                    Text {
+                                        text: m.description;
+                                        color: Palette.subtext;
+                                        font-size: 11px;
+                                        overflow: elide;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Button {
+                                        text: "Open";
+                                        clicked => { root.select-module(i); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if root.current-page >= 0 && root.current-page < modules.length: Rectangle {
+                    property <ModuleInfo> mod: modules[root.current-page];
+
+                    ScrollView {
+                        VerticalLayout {
+                            padding: 24px;
+                            spacing: 12px;
+
+                            HorizontalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: mod.name;
+                                    font-size: 22px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                    vertical-alignment: center;
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        border-radius: 11px;
+                                        background: mod.status == "applied" ? #a6e3a155 :
+                                                    (mod.status == "running…" ? #f9e2af55 : Palette.surface);
+                                        width: 92px;
+                                        height: 22px;
+                                        Text {
+                                            text: mod.status == "" ? "not applied" : mod.status;
+                                            color: Palette.text;
+                                            font-size: 11px;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                                Rectangle {}
+                                VerticalLayout {
+                                    alignment: center;
+                                    CheckBox {
+                                        text: "select";
+                                        checked <=> mod.selected;
+                                        enabled: !root.running;
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: mod.description;
+                                color: Palette.subtext;
+                                font-size: 13px;
+                                wrap: word-wrap;
+                            }
+
+                            Rectangle { height: 6px; }
+
+                            Text {
+                                text: "What this module does";
+                                font-size: 15px;
+                                font-weight: 700;
+                                color: Palette.accent;
+                            }
+                            Text {
+                                text: mod.details;
+                                color: Palette.text;
+                                font-size: 13px;
+                                wrap: word-wrap;
+                            }
+
+                            Rectangle { height: 10px; }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: end;
+                                Button {
+                                    text: "Undo";
+                                    enabled: !root.running;
+                                    clicked => { root.undo-module(root.current-page); }
+                                }
+                                Button {
+                                    text: "Apply";
+                                    primary: true;
+                                    enabled: !root.running;
+                                    clicked => { root.apply-module(root.current-page); }
+                                }
                             }
                         }
                     }
                 }
             }
-        } // main pane
+        }
 
-        } // end HorizontalLayout (sidebar + main)
-
-        // ── Log strip along the bottom, always visible ──
+        // ── Log strip resize handle ──
         Rectangle {
-            height: 150px;
-            background: #181825;
+            height: 5px;
+            background: vsplit-ta.has-hover || vsplit-ta.pressed ? Palette.accent : Palette.panel;
+            vsplit-ta := TouchArea {
+                property <length> start-height;
+                property <length> press-y;
+                pointer-event(ev) => {
+                    if ev.kind == PointerEventKind.down {
+                        self.start-height = root.log-height;
+                        self.press-y = self.mouse-y;
+                    }
+                }
+                moved => {
+                    root.log-height = Math.max(80px, Math.min(500px,
+                        self.start-height + (self.press-y - self.mouse-y)));
+                }
+                mouse-cursor: ns-resize;
+            }
+        }
+
+        // ── Log strip ──
+        Rectangle {
+            height: root.log-height;
+            background: Palette.panel;
+            clip: true;
             VerticalLayout {
                 spacing: 0;
-                Rectangle { height: 1px; background: #313244; }
                 HorizontalLayout {
-                    padding-left: 10px;
-                    padding-top: 4px;
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    padding-top: 6px;
+                    padding-bottom: 2px;
                     Text {
                         text: "log";
                         font-size: 10px;
-                        color: #6c7086;
+                        letter-spacing: 2px;
+                        color: Palette.faint;
+                        vertical-alignment: center;
+                    }
+                    Rectangle {}
+                    Text {
+                        text: root.running ? "⟳ working…" : "";
+                        color: Palette.yellow;
+                        font-size: 10px;
+                        vertical-alignment: center;
                     }
                 }
                 ScrollView {
-                    Text {
-                        text: root.log-text;
-                        color: #cdd6f4;
-                        font-family: "monospace";
-                        font-size: 11px;
-                        wrap: word-wrap;
+                    VerticalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        padding-bottom: 8px;
+                        Text {
+                            text: root.log-text;
+                            color: Palette.text;
+                            font-family: "monospace";
+                            font-size: 11px;
+                            wrap: word-wrap;
+                        }
                     }
                 }
             }

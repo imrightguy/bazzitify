@@ -4,13 +4,15 @@ use crate::module::Module;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::time::Instant;
 
 /// Outcome of running a module function.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct RunResult {
     pub success: bool,
     pub exit_code: Option<i32>,
     pub output: String,
+    pub duration_ms: u64,
 }
 
 /// Run `module_apply` (or `module_undo`) for the given module script.
@@ -58,6 +60,7 @@ pub fn run_module_opts(
         .stderr(Stdio::piped())
         .spawn()?;
 
+    let start = Instant::now();
     let stdout = child.stdout.take().expect("stdout piped");
     let stderr = child.stderr.take().expect("stderr piped");
 
@@ -84,10 +87,12 @@ pub fn run_module_opts(
     }
 
     let status = child.wait()?;
+    let duration_ms = start.elapsed().as_millis() as u64;
     Ok(RunResult {
         success: status.success(),
         exit_code: status.code(),
         output,
+        duration_ms,
     })
 }
 

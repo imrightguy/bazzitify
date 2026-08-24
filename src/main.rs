@@ -4,9 +4,10 @@ use bazzitify::distro::{detect_distro, distro_pretty_name};
 use bazzitify::module::{Module, ModuleGraph};
 use bazzitify::profile::{Profile, ProfileError};
 use bazzitify::runner::{RunOpts, run_module_opts};
+use serde::Serialize;
 use slint::Model;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::mpsc;
 
@@ -25,6 +26,42 @@ fn config_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("bazzitify")
         .join("profiles")
+}
+
+/// JSON output mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JsonMode {
+    Off,
+    Compact,
+    Pretty,
+}
+
+/// Module info for JSON output (subset of Module fields).
+#[derive(Debug, Serialize)]
+struct ModuleJson {
+    name: String,
+    desc: Option<String>,
+    long: Vec<String>,
+    status: String,
+    depends: Vec<String>,
+}
+
+/// Result for apply/undo in JSON mode.
+#[derive(Debug, Serialize)]
+struct ApplyResultJson {
+    module: String,
+    success: bool,
+    stdout: String,
+    stderr: String,
+    duration_ms: u64,
+}
+
+/// Dry-run plan entry for JSON output.
+#[derive(Debug, Serialize)]
+struct DryRunPlanJson {
+    module: String,
+    action: String,
+    depends: Vec<String>,
 }
 
 enum Event {
@@ -258,18 +295,327 @@ fn print_usage() {
     eprintln!("  bazzitify --all                   Apply all modules");
     eprintln!("  bazzitify undo <module>           Undo a module");
     eprintln!("  bazzitify <module>                Apply a single module");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --json              Output JSON (compact)");
+    eprintln!("  --json=pretty       Output JSON (pretty-printed)");
+}
+
+fn parse_json_mode(args: &[String]) -> (JsonMode, Vec<String>) {
+    let mut mode = JsonMode::Off;
+    let mut remaining = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--json" {
+            mode = JsonMode::Compact;
+        } else if arg == "--json=pretty" {
+            mode = JsonMode::Pretty;
+        } else if arg.starts_with("--json=") {
+            // Handle --json=compact explicitly
+            if arg == "--json=compact" {
+                mode = JsonMode::Compact;
+            } else {
+                eprintln!(
+                    "Unknown --json value: {}. Use --json, --json=compact, or --json=pretty",
+                    arg
+                );
+                process::exit(1);
+            }
+        } else {
+            remaining.push(arg.clone());
+        }
+        i += 1;
+    }
+    (mode, remaining)
+}
+
+fn output_json<T: Serialize>(value: &T, mode: JsonMode) {
+    let json = match mode {
+        JsonMode::Compact => serde_json::to_string(value).unwrap(),
+        JsonMode::Pretty => serde_json::to_string_pretty(value).unwrap(),
+        JsonMode::Off => unreachable!(),
+    };
+    println!("{}", json);
+}
+
+fn cli_list_modules(
+    discovered: &[Module],
+    applied: &bazzitify::state::AppliedState,
+    json_mode: JsonMode,
+) {
+    if json_mode != JsonMode::Off {
+        let modules: Vec<ModuleJson> = discovered
+            .iter()
+            .map(|m| ModuleJson {
+                name: m.name.clone(),
+                desc: m.description.clone(),
+                long: m.long_description.clone(),
+                status: if applied.is_applied(&m.name) {
+                    "applied".into()
+                } else {
+                    "available".into()
+                },
+                depends: m.depends.clone(),
+            })
+            .collect();
+        output_json(&modules, json_mode);
+    } else {
+        println!("Available modules:");
+        for m in discovered {
+            let deps = m.depends.join(" ");
+            if deps.is_empty() {
+                println!(
+                    "  {:<20} {}",
+                    m.name,
+                    m.description.clone().unwrap_or_default()
+                );
+            } else {
+                println!(
+                    "  {:<20} {} (depends: {})",
+                    m.name,
+                    m.description.clone().unwrap_or_default(),
+                    deps
+                );
+            }
+        }
+    }
+}
+
+fn cli_dry_run(discovered: &[Module], json_mode: JsonMode) {
+    if let Ok(sorted) = ModuleGraph::topological_sort(discovered) {
+        if json_mode != JsonMode::Off {
+            let plan: Vec<DryRunPlanJson> = sorted
+                .iter()
+                .map(|m| DryRunPlanJson {
+                    module: m.name.clone(),
+                    action: "apply".into(),
+                    depends: m.depends.clone(),
+                })
+                .collect();
+            output_json(&plan, json_mode);
+        } else {
+            println!("DRY RUN — modules that would run (in dependency order):");
+            for m in sorted {
+                println!("  {}", m.name);
+            }
+        }
+    }
+}
+
+fn cli_apply_all(dir: &Path, discovered: &[Module], json_mode: JsonMode) -> i32 {
+    let mut exit_code = 0;
+    let mut results = Vec::new();
+
+    if let Ok(sorted) = ModuleGraph::topological_sort(discovered) {
+        for m in sorted {
+            if m.has_apply {
+                match run_module_opts(dir, &m, "apply", RunOpts::default()) {
+                    Ok(r) => {
+                        if !r.success {
+                            exit_code = 1;
+                        }
+                        if json_mode != JsonMode::Off {
+                            // Split stdout/stderr from combined output
+                            // For simplicity, we'll put all in stdout and leave stderr empty
+                            // A more sophisticated version could separate them
+                            results.push(ApplyResultJson {
+                                module: m.name.clone(),
+                                success: r.success,
+                                stdout: r.output.clone(),
+                                stderr: String::new(),
+                                duration_ms: r.duration_ms,
+                            });
+                        } else {
+                            for line in r.output.lines() {
+                                println!("{}", line);
+                            }
+                            if r.success {
+                                println!("✓ {} ok", m.name);
+                            } else {
+                                eprintln!("✗ {} failed", m.name);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        exit_code = 1;
+                        if json_mode != JsonMode::Off {
+                            results.push(ApplyResultJson {
+                                module: m.name.clone(),
+                                success: false,
+                                stdout: String::new(),
+                                stderr: format!("error running {}: {}", m.name, e),
+                                duration_ms: 0,
+                            });
+                        } else {
+                            eprintln!("error running {}: {}", m.name, e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if json_mode != JsonMode::Off {
+        output_json(&results, json_mode);
+    }
+    exit_code
+}
+
+fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) -> i32 {
+    let mut exit_code = 0;
+    if let Some(m) = discovered.iter().find(|m| m.name == name) {
+        if m.has_apply {
+            match run_module_opts(dir, m, "apply", RunOpts::default()) {
+                Ok(r) => {
+                    if !r.success {
+                        exit_code = 1;
+                    }
+                    if json_mode != JsonMode::Off {
+                        let result = ApplyResultJson {
+                            module: m.name.clone(),
+                            success: r.success,
+                            stdout: r.output.clone(),
+                            stderr: String::new(),
+                            duration_ms: r.duration_ms,
+                        };
+                        output_json(&result, json_mode);
+                    } else {
+                        for line in r.output.lines() {
+                            println!("{}", line);
+                        }
+                    }
+                }
+                Err(e) => {
+                    exit_code = 1;
+                    if json_mode != JsonMode::Off {
+                        let result = ApplyResultJson {
+                            module: m.name.clone(),
+                            success: false,
+                            stdout: String::new(),
+                            stderr: format!("error running {}: {}", m.name, e),
+                            duration_ms: 0,
+                        };
+                        output_json(&result, json_mode);
+                    } else {
+                        eprintln!("error running {}: {}", m.name, e);
+                    }
+                }
+            }
+        } else {
+            if json_mode != JsonMode::Off {
+                let result = ApplyResultJson {
+                    module: m.name.clone(),
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!("Module {} has no apply function", name),
+                    duration_ms: 0,
+                };
+                output_json(&result, json_mode);
+            } else {
+                eprintln!("Module {} has no apply — skipping.", name);
+            }
+            exit_code = 1;
+        }
+    } else {
+        if json_mode != JsonMode::Off {
+            let result = ApplyResultJson {
+                module: name.into(),
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Unknown module: {}", name),
+                duration_ms: 0,
+            };
+            output_json(&result, json_mode);
+        } else {
+            eprintln!("Unknown module: {}", name);
+        }
+        exit_code = 1;
+    }
+    exit_code
+}
+
+fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) -> i32 {
+    let mut exit_code = 0;
+    if let Some(m) = discovered.iter().find(|m| m.name == name) {
+        if m.has_undo {
+            match run_module_opts(dir, m, "undo", RunOpts::default()) {
+                Ok(r) => {
+                    if !r.success {
+                        exit_code = 1;
+                    }
+                    if json_mode != JsonMode::Off {
+                        let result = ApplyResultJson {
+                            module: m.name.clone(),
+                            success: r.success,
+                            stdout: r.output.clone(),
+                            stderr: String::new(),
+                            duration_ms: r.duration_ms,
+                        };
+                        output_json(&result, json_mode);
+                    } else {
+                        for line in r.output.lines() {
+                            println!("{}", line);
+                        }
+                    }
+                }
+                Err(e) => {
+                    exit_code = 1;
+                    if json_mode != JsonMode::Off {
+                        let result = ApplyResultJson {
+                            module: m.name.clone(),
+                            success: false,
+                            stdout: String::new(),
+                            stderr: format!("error running {}: {}", m.name, e),
+                            duration_ms: 0,
+                        };
+                        output_json(&result, json_mode);
+                    } else {
+                        eprintln!("error running {}: {}", m.name, e);
+                    }
+                }
+            }
+        } else {
+            if json_mode != JsonMode::Off {
+                let result = ApplyResultJson {
+                    module: m.name.clone(),
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!("Module {} has no undo function", name),
+                    duration_ms: 0,
+                };
+                output_json(&result, json_mode);
+            } else {
+                eprintln!("Module {} has no undo — skipping.", name);
+            }
+            exit_code = 1;
+        }
+    } else {
+        if json_mode != JsonMode::Off {
+            let result = ApplyResultJson {
+                module: name.into(),
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Unknown module: {}", name),
+                duration_ms: 0,
+            };
+            output_json(&result, json_mode);
+        } else {
+            eprintln!("Unknown module: {}", name);
+        }
+        exit_code = 1;
+    }
+    exit_code
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // If no args or first arg is not a known CLI flag, run GUI
-    if args.len() == 1
-        || (args.len() > 1
-            && !args[1].starts_with('-')
-            && args[1] != "profile"
-            && args[1] != "undo")
-    {
+    // Parse --json flag first
+    let (json_mode, args) = parse_json_mode(&args);
+
+    // If no args, run GUI
+    if args.len() == 1 {
         run_gui();
         return;
     }
@@ -277,138 +623,89 @@ fn main() {
     // CLI mode
     let dir = modules_dir();
     let discovered = Module::discover(&dir).unwrap_or_default();
+    let applied = bazzitify::state::load(&bazzitify::state::state_path());
 
-    match args.get(1).map(String::as_str) {
+    let exit_code = match args.get(1).map(String::as_str) {
         Some("profile") => match args.get(2).map(String::as_str) {
             Some("export") => {
                 if args.len() < 4 {
                     print_usage();
-                    process::exit(1);
-                }
-                if let Err(e) = cli_export(&discovered, &args[3]) {
-                    eprintln!("Error: {}", e);
-                    process::exit(1);
+                    1
+                } else {
+                    if let Err(e) = cli_export(&discovered, &args[3]) {
+                        if json_mode != JsonMode::Off {
+                            let err = serde_json::json!({"error": e.to_string()});
+                            output_json(&err, json_mode);
+                        } else {
+                            eprintln!("Error: {}", e);
+                        }
+                        1
+                    } else {
+                        0
+                    }
                 }
             }
             Some("import") => {
                 if args.len() < 4 {
                     print_usage();
-                    process::exit(1);
-                }
-                if let Err(e) = cli_import(&args[3]) {
-                    eprintln!("Error: {}", e);
-                    process::exit(1);
+                    1
+                } else {
+                    if let Err(e) = cli_import(&args[3]) {
+                        if json_mode != JsonMode::Off {
+                            let err = serde_json::json!({"error": e.to_string()});
+                            output_json(&err, json_mode);
+                        } else {
+                            eprintln!("Error: {}", e);
+                        }
+                        1
+                    } else {
+                        0
+                    }
                 }
             }
             Some("list") => {
                 if let Err(e) = cli_list() {
-                    eprintln!("Error: {}", e);
-                    process::exit(1);
+                    if json_mode != JsonMode::Off {
+                        let err = serde_json::json!({"error": e.to_string()});
+                        output_json(&err, json_mode);
+                    } else {
+                        eprintln!("Error: {}", e);
+                    }
+                    1
+                } else {
+                    0
                 }
             }
             _ => {
                 print_usage();
-                process::exit(1);
+                1
             }
         },
         Some("--list") | Some("-l") => {
-            println!("Available modules:");
-            for m in &discovered {
-                let deps = m.depends.join(" ");
-                if deps.is_empty() {
-                    println!(
-                        "  {:<20} {}",
-                        m.name,
-                        m.description.clone().unwrap_or_default()
-                    );
-                } else {
-                    println!(
-                        "  {:<20} {} (depends: {})",
-                        m.name,
-                        m.description.clone().unwrap_or_default(),
-                        deps
-                    );
-                }
-            }
+            cli_list_modules(&discovered, &applied, json_mode);
+            0
         }
         Some("--dry-run") | Some("-n") => {
-            println!("DRY RUN — modules that would run (in dependency order):");
-            if let Ok(sorted) = ModuleGraph::topological_sort(&discovered) {
-                for m in sorted {
-                    println!("  {}", m.name);
-                }
-            }
+            cli_dry_run(&discovered, json_mode);
+            0
         }
-        Some("--all") => {
-            println!("Applying all modules in dependency order...");
-            if let Ok(sorted) = ModuleGraph::topological_sort(&discovered) {
-                for m in sorted {
-                    if m.has_apply {
-                        match run_module_opts(&dir, &m, "apply", RunOpts::default()) {
-                            Ok(r) => {
-                                for line in r.output.lines() {
-                                    println!("{}", line);
-                                }
-                                if r.success {
-                                    println!("✓ {} ok", m.name);
-                                } else {
-                                    eprintln!("✗ {} failed", m.name);
-                                }
-                            }
-                            Err(e) => eprintln!("error running {}: {}", m.name, e),
-                        }
-                    }
-                }
-            }
-        }
+        Some("--all") => cli_apply_all(&dir, &discovered, json_mode),
         Some("undo") => {
             if args.len() < 3 {
                 print_usage();
-                process::exit(1);
-            }
-            let name = &args[2];
-            if let Some(m) = discovered.iter().find(|m| m.name == *name) {
-                if m.has_undo {
-                    match run_module_opts(&dir, m, "undo", RunOpts::default()) {
-                        Ok(r) => {
-                            for line in r.output.lines() {
-                                println!("{}", line);
-                            }
-                        }
-                        Err(e) => eprintln!("error running {}: {}", m.name, e),
-                    }
-                } else {
-                    eprintln!("Module {} has no undo — skipping.", name);
-                }
+                1
             } else {
-                eprintln!("Unknown module: {}", name);
-                process::exit(1);
+                cli_undo(&dir, &discovered, &args[2], json_mode)
             }
         }
-        Some(module_name) => {
-            // Single module apply
-            if let Some(m) = discovered.iter().find(|m| m.name == module_name) {
-                if m.has_apply {
-                    match run_module_opts(&dir, m, "apply", RunOpts::default()) {
-                        Ok(r) => {
-                            for line in r.output.lines() {
-                                println!("{}", line);
-                            }
-                        }
-                        Err(e) => eprintln!("error running {}: {}", m.name, e),
-                    }
-                } else {
-                    eprintln!("Module {} has no apply — skipping.", module_name);
-                }
-            } else {
-                eprintln!("Unknown module: {}", module_name);
-                process::exit(1);
-            }
-        }
+        Some(module_name) => cli_apply_single(&dir, &discovered, module_name, json_mode),
         None => {
             run_gui();
+            0
         }
-    }
+    };
+
+    process::exit(exit_code);
 }
 
 fn run_gui() {

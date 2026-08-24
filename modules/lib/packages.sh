@@ -146,6 +146,11 @@ _resolve_arch() {
         auto-cpufreq) echo "auto-cpufreq" ;;
         amd-pstate) echo "linux" ;;  # kernel parameter, not a package
         intel-pstate) echo "linux" ;;
+
+        # HDR/VRR
+        kwin-effects-hdr) echo "kwin" ;;
+        color-management) echo "colord" ;;
+        vkbasalt) echo "vkbasalt" ;;
         
         # System tuning
         sysctl) echo "procps-ng" ;;
@@ -236,7 +241,12 @@ _resolve_debian() {
         cpupower) echo "linux-cpupower" ;;
         thermald) echo "thermald" ;;
         auto-cpufreq) echo "auto-cpufreq" ;;
-        
+
+        # HDR/VRR
+        kwin-effects-hdr) echo "kwin" ;;
+        color-management) echo "colord" ;;
+        vkbasalt) echo "vkbasalt" ;;
+
         sysctl) echo "procps" ;;
         kernel-params) echo "grub2" ;;
         
@@ -336,7 +346,12 @@ _resolve_opensuse() {
         cpupower) echo "kernel-tools" ;;
         thermald) echo "thermald" ;;
         auto-cpufreq) echo "auto-cpufreq" ;;
-        
+
+        # HDR/VRR
+        kwin-effects-hdr) echo "kwin" ;;
+        color-management) echo "colord" ;;
+        vkbasalt) echo "vkbasalt" ;;
+
         sysctl) echo "procps" ;;
         kernel-params) echo "grub2" ;;
         
@@ -422,7 +437,12 @@ _resolve_fedora() {
         cpupower) echo "kernel-tools" ;;
         thermald) echo "thermald" ;;
         auto-cpufreq) echo "auto-cpufreq" ;;
-        
+
+        # HDR/VRR
+        kwin-effects-hdr) echo "kwin" ;;
+        color-management) echo "colord" ;;
+        vkbasalt) echo "vkbasalt" ;;
+
         sysctl) echo "procps-ng" ;;
         kernel-params) echo "grub2" ;;
         

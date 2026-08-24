@@ -254,7 +254,15 @@ fn discovers_hdr_vrr_module() {
     );
     assert!(hdr.has_apply, "hdr-vrr should have module_apply");
     assert!(hdr.has_undo, "hdr-vrr should have module_undo");
-    assert_eq!(hdr.depends, vec!["gpu-drivers", "display-gpu-control"]);
+    assert_eq!(
+        hdr.depends,
+        vec![
+            "gpu-drivers",
+            "display-gpu-control",
+            "codecs",
+            "kernel-params"
+        ]
+    );
 }
 
 #[test]

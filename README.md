@@ -60,6 +60,7 @@ for the mutable distro you already run.**
 | **services** | GameMode daemon install + user service enablement | ✅ full |
 | **filesystems** | Weekly `fstrim.timer`, zram swap (zstd, capped), lower swappiness for zram setups | ✅ full |
 | **flatpak** | Flathub remote + ProtonUp-Qt and protontricks GUI | partial |
+| **hdr-vrr** | HDR/VRR gaming helpers: compositor detection (KWin ≥6, gamescope, Hyprland, sway), KWin scripts, env vars, VRR kernel param | ✅ full¹ |
 
 <sub>¹ Package *removal* on undo is deliberately conservative — it never removes anything you might have installed yourself before running bazzitify.<br/>
 ² Uninstalling GPU drivers would leave you at a black screen; the undo refuses on purpose.</sub>

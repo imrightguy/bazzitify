@@ -12,6 +12,10 @@ CONFIG_DIR="$HOME/.config/bazzitify/profiles"
 mkdir -p "$STATE_DIR"
 mkdir -p "$CONFIG_DIR"
 
+# JSON output mode
+# 0 = off, 1 = compact, 2 = pretty
+JSON_MODE=0
+
 # Read all modules and their dependencies, output topological order
 # Usage: topological_order [apply|undo]
 # For apply: dependencies first
@@ -103,23 +107,121 @@ topological_order() {
   fi
 }
 
-list_modules() {
-  echo "Available modules:"
-  for f in "$MODULES_DIR"/*.sh; do
-    [[ -e "$f" ]] || { echo "  (none yet)"; return; }
-    # shellcheck disable=SC1090
-    desc=$(grep -m1 '^# desc:' "$f" | cut -d: -f2- || true)
-    # Prefer # requires:, fallback to # depends:
-    deps=$(grep -m1 '^# requires:' "$f" | cut -d: -f2- | xargs || true)
-    if [[ -z "$deps" ]]; then
-      deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
-    fi
-    if [[ -n "$deps" ]]; then
-      printf '  %-20s %s (depends: %s)\n' "$(basename "$f" .sh)" "$desc" "$deps"
-    else
-      printf '  %-20s %s\n' "$(basename "$f" .sh)" "$desc"
-    fi
+# JSON output helpers
+json_escape() {
+  # Escape string for JSON using jq
+  jq -n --arg v "$1" '$v'
+}
+
+json_array_from_list() {
+  # Convert newline-separated list to JSON array
+  local items=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && items+=("$line")
   done
+  printf '%s\n' "${items[@]}" | jq -R . | jq -s .
+}
+
+output_json() {
+  local data="$1"
+  if [[ $JSON_MODE -eq 2 ]]; then
+    echo "$data" | jq .
+  else
+    echo "$data" | jq -c .
+  fi
+}
+
+# Check if module has apply/undo functions
+module_has_apply() {
+  local name="$1"
+  local f="$MODULES_DIR/$name.sh"
+  [[ -f "$f" ]] || return 1
+  grep -q '^module_apply()' "$f"
+}
+
+module_has_undo() {
+  local name="$1"
+  local f="$MODULES_DIR/$name.sh"
+  [[ -f "$f" ]] || return 1
+  grep -q '^module_undo()' "$f"
+}
+
+# Get module description
+module_desc() {
+  local f="$1"
+  grep -m1 '^# desc:' "$f" | cut -d: -f2- | xargs || true
+}
+
+# Get module long description as JSON array
+module_long_json() {
+  local f="$1"
+  local long_lines=()
+  # Extract # long: lines
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && long_lines+=("$line")
+  done < <(grep '^# long:' "$f" | cut -d: -f2- | sed 's/^ *//' || true)
+  printf '%s\n' "${long_lines[@]}" | jq -R . | jq -s .
+}
+
+# Get module dependencies as JSON array
+module_deps_json() {
+  local f="$1"
+  local deps
+  deps=$(grep -m1 '^# requires:' "$f" | cut -d: -f2- | xargs || true)
+  if [[ -z "$deps" ]]; then
+    deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+  fi
+  if [[ -n "$deps" ]]; then
+    printf '%s\n' $deps | jq -R . | jq -s .
+  else
+    echo '[]'
+  fi
+}
+
+list_modules() {
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "Available modules:"
+    for f in "$MODULES_DIR"/*.sh; do
+      [[ -e "$f" ]] || { echo "  (none yet)"; return; }
+      desc=$(module_desc "$f")
+      deps=$(grep -m1 '^# requires:' "$f" | cut -d: -f2- | xargs || true)
+      if [[ -z "$deps" ]]; then
+        deps=$(grep -m1 '^# depends:' "$f" | cut -d: -f2- | xargs || true)
+      fi
+      if [[ -n "$deps" ]]; then
+        printf '  %-20s %s (depends: %s)\n' "$(basename "$f" .sh)" "$desc" "$deps"
+      else
+        printf '  %-20s %s\n' "$(basename "$f" .sh)" "$desc"
+      fi
+    done
+  else
+    # JSON output
+    local modules_json=()
+    for f in "$MODULES_DIR"/*.sh; do
+      [[ -e "$f" ]] || continue
+      local name=$(basename "$f" .sh)
+      local desc=$(module_desc "$f")
+      local long_json=$(module_long_json "$f")
+      local deps_json=$(module_deps_json "$f")
+      local has_apply=false
+      local has_undo=false
+      module_has_apply "$name" && has_apply=true
+      module_has_undo "$name" && has_undo=true
+
+      local module_json
+      module_json=$(jq -n \
+        --arg name "$name" \
+        --arg desc "$desc" \
+        --argjson long "$long_json" \
+        --argjson has_apply "$has_apply" \
+        --argjson has_undo "$has_undo" \
+        --argjson depends "$deps_json" \
+        '{name: $name, desc: $desc, long: $long, has_apply: $has_apply, has_undo: $has_undo, depends: $depends}')
+      modules_json+=("$module_json")
+    done
+    # Combine into array
+    printf '%s\n' "${modules_json[@]}" | jq -s .
+  fi
 }
 
 run_module() {
@@ -128,15 +230,49 @@ run_module() {
   if [[ ! -f "$f" ]]; then
     echo "Unknown module: $name" >&2; exit 1
   fi
-  echo "==> $name"
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "==> $name"
+  fi
   # shellcheck disable=SC1090
   source "$f"
+  local start_time
+  start_time=$(date +%s%3N)
+  local output
+  local exit_code=0
   if declare -F "module_apply" >/dev/null; then
-    module_apply "$@"
-    echo "$(date -Is) $name" >> "$LOG_FILE"
+    output=$(module_apply "$@" 2>&1) || exit_code=$?
   else
-    echo "  (module defines no module_apply, skipped)" >&2
+    output="(module defines no module_apply, skipped)"
+    exit_code=1
   fi
+  local end_time
+  end_time=$(date +%s%3N)
+  local duration_ms=$((end_time - start_time))
+
+  if [[ $JSON_MODE -eq 0 ]]; then
+    for line in $output; do
+      echo "$line"
+    done
+    if [[ $exit_code -eq 0 ]]; then
+      echo "$(date -Is) $name" >> "$LOG_FILE"
+    fi
+  fi
+
+  if [[ $JSON_MODE -ne 0 ]]; then
+    local success=$([[ $exit_code -eq 0 ]] && echo true || echo false)
+    local result
+    result=$(jq -n \
+      --arg module "$name" \
+      --arg action "apply" \
+      --argjson success "$success" \
+      --arg output "$output" \
+      --arg error "$([ $exit_code -eq 0 ] && echo null || echo "$output")" \
+      --argjson duration_ms "$duration_ms" \
+      '{module: $module, action: $action, success: $success, output: $output, error: $error, duration_ms: $duration_ms}')
+    output_json "$result"
+  fi
+
+  return $exit_code
 }
 
 undo_module() {
@@ -145,10 +281,108 @@ undo_module() {
   [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 1; }
   # shellcheck disable=SC1090
   source "$f"
+  local start_time
+  start_time=$(date +%s%3N)
+  local output
+  local exit_code=0
   if declare -F "module_undo" >/dev/null; then
-    module_undo
+    output=$(module_undo 2>&1) || exit_code=$?
   else
-    echo "Module $name has no undo — skipping." >&2
+    output="Module $name has no undo — skipping."
+    exit_code=1
+  fi
+  local end_time
+  end_time=$(date +%s%3N)
+  local duration_ms=$((end_time - start_time))
+
+  if [[ $JSON_MODE -eq 0 ]]; then
+    for line in $output; do
+      echo "$line"
+    done
+  fi
+
+  if [[ $JSON_MODE -ne 0 ]]; then
+    local success=$([[ $exit_code -eq 0 ]] && echo true || echo false)
+    local result
+    result=$(jq -n \
+      --arg module "$name" \
+      --arg action "undo" \
+      --argjson success "$success" \
+      --arg output "$output" \
+      --arg error "$([ $exit_code -eq 0 ] && echo null || echo "$output")" \
+      --argjson duration_ms "$duration_ms" \
+      '{module: $module, action: $action, success: $success, output: $output, error: $error, duration_ms: $duration_ms}')
+    output_json "$result"
+  fi
+
+  return $exit_code
+}
+
+dry_run_module() {
+  local name="${1:-}"
+  if [[ $JSON_MODE -eq 0 ]]; then
+    if [[ -n "$name" ]]; then
+      echo "DRY RUN — module: $name"
+      topological_order apply | grep -E "^$name$|^$name " || echo "  $name"
+    else
+      echo "DRY RUN — modules that would run (in dependency order):"
+      topological_order apply
+    fi
+  else
+    # JSON dry-run: show planned execution order with module details
+    local plan=()
+    if [[ -n "$name" ]]; then
+      # Module-specific dry-run
+      local f_mod="$MODULES_DIR/$name.sh"
+      local would_apply=false
+      local commands=()
+      local warnings=()
+      if [[ -f "$f_mod" ]]; then
+        if grep -q '^module_apply()' "$f_mod"; then
+          would_apply=true
+        fi
+        commands+=("Would run module_apply for $name")
+        if grep -q 'sudo' "$f_mod"; then
+          warnings+=("Requires sudo privileges")
+        fi
+      fi
+      local plan_json
+      plan_json=$(jq -n \
+        --arg module "$name" \
+        --argjson would_apply "$would_apply" \
+        --argjson commands "$(printf '%s\n' "${commands[@]}" | jq -R . | jq -s .)" \
+        --argjson warnings "$(printf '%s\n' "${warnings[@]}" | grep -v '^$' | jq -R . | jq -s .)" \
+        '{module: $module, would_apply: $would_apply, commands: $commands, warnings: $warnings}')
+      plan+=("$plan_json")
+    else
+      # Full dry-run: all modules in dependency order
+      local sorted
+      mapfile -t sorted < <(topological_order apply)
+      for mod in "${sorted[@]}"; do
+        local f_mod="$MODULES_DIR/$mod.sh"
+        local would_apply=false
+        local commands=()
+        local warnings=()
+        if [[ -f "$f_mod" ]]; then
+          if grep -q '^module_apply()' "$f_mod"; then
+            would_apply=true
+          fi
+          commands+=("Would run module_apply for $mod")
+          if grep -q 'sudo' "$f_mod"; then
+            warnings+=("Requires sudo privileges")
+          fi
+        fi
+        local plan_json
+        plan_json=$(jq -n \
+          --arg module "$mod" \
+          --argjson would_apply "$would_apply" \
+          --argjson commands "$(printf '%s\n' "${commands[@]}" | jq -R . | jq -s .)" \
+          --argjson warnings "$(printf '%s\n' "${warnings[@]}" | grep -v '^$' | jq -R . | jq -s .)" \
+          '{module: $module, would_apply: $would_apply, commands: $commands, warnings: $warnings}')
+        plan+=("$plan_json")
+      done
+    fi
+    printf '%s\n' "${plan[@]}" | jq -s .
   fi
 }
 
@@ -172,34 +406,86 @@ profile_list() {
   "$SCRIPT_DIR/bazzitify-profile" list
 }
 
-case "${1:-}" in
-  --list|-l) list_modules ;;
-  --dry-run|-n)
-    echo "DRY RUN — modules that would run (in dependency order):"
-    topological_order apply
-    ;;
-  undo)
-    [[ -n "${2:-}" ]] && undo_module "$2" || echo "Usage: bazzitify undo <module>" ;;
-  --all)
-    echo "Applying all modules in dependency order..."
-    topological_order apply | while IFS= read -r mod; do
-      run_module "$mod"
-    done
-    ;;
-  profile)
-    subcmd="${2:-}"
-    case "$subcmd" in
-      export) profile_export "${3:-}" ;;
-      import) profile_import "${3:-}" ;;
-      list) profile_list ;;
-      *) echo "Usage: bazzitify profile <export|import|list>" >&2; exit 1 ;;
+# Parse global --json flag
+# Returns remaining args via global PARSED_ARGS array
+PARSED_ARGS=()
+parse_json_flag() {
+  local args=("$@")
+  PARSED_ARGS=()
+  for arg in "${args[@]}"; do
+    case "$arg" in
+      --json)
+        JSON_MODE=1
+        ;;
+      --json=pretty)
+        JSON_MODE=2
+        ;;
+      --json=compact)
+        JSON_MODE=1
+        ;;
+      --json=*)
+        echo "Unknown --json value: $arg. Use --json, --json=compact, or --json=pretty" >&2
+        exit 1
+        ;;
+      *)
+        PARSED_ARGS+=("$arg")
+        ;;
     esac
-    ;;
-  "")
-    echo "bazzitify — Bazzite-style gaming optimization for mutable distros"
-    echo
-    echo "Usage: bazzitify <module|--all|--list|--dry-run|undo <module>|profile <export|import|list>>"
-    echo
-    list_modules ;;
-  *) run_module "$1" "${@:2}" ;;
-esac
+  done
+}
+
+# Main command dispatch
+main() {
+  # Parse --json flag first
+  local args=("$@")
+  parse_json_flag "${args[@]}"
+  set -- "${PARSED_ARGS[@]}"
+
+  case "${1:-}" in
+    --list|-l)
+      list_modules
+      ;;
+    --dry-run|-n)
+      dry_run_module "${2:-}"
+      ;;
+    undo)
+      if [[ -n "${2:-}" ]]; then
+        undo_module "$2"
+      else
+        echo "Usage: bazzitify undo <module>" >&2
+        exit 1
+      fi
+      ;;
+    --all)
+      echo "Applying all modules in dependency order..."
+      topological_order apply | while IFS= read -r mod; do
+        run_module "$mod"
+      done
+      ;;
+    profile)
+      subcmd="${2:-}"
+      case "$subcmd" in
+        export) profile_export "${3:-}" ;;
+        import) profile_import "${3:-}" ;;
+        list) profile_list ;;
+        *) echo "Usage: bazzitify profile <export|import|list>" >&2; exit 1 ;;
+      esac
+      ;;
+    "")
+      echo "bazzitify — Bazzite-style gaming optimization for mutable distros"
+      echo
+      echo "Usage: bazzitify <module|--all|--list|--dry-run|undo <module>|profile <export|import|list>>"
+      echo
+      echo "Options:"
+      echo "  --json              Output JSON (compact)"
+      echo "  --json=pretty       Output JSON (pretty-printed)"
+      echo
+      list_modules
+      ;;
+    *)
+      run_module "$1" "${@:2}"
+      ;;
+  esac
+}
+
+main "$@"

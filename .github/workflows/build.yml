@@ -19,7 +19,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -43,7 +43,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: System dependencies
@@ -64,6 +64,7 @@ jobs:
           install -Dm644 packaging/bazzitify.desktop "$APPDIR/bazzitify.desktop"
           install -Dm644 packaging/bazzitify.png     "$APPDIR/bazzitify.png"
           install -Dm644 packaging/bazzitify.png     "$APPDIR/usr/share/icons/hicolor/256x256/apps/bazzitify.png"
+          install -d "$APPDIR/usr/share/bazzitify"
           cp -a modules "$APPDIR/usr/share/bazzitify/modules"
       - name: Download linuxdeploy
         run: |
@@ -87,23 +88,28 @@ jobs:
           grep -q '^Available modules:' module-list.txt
           grep -q 'gamemode' module-list.txt
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: appimage
           path: bazzitify-*.AppImage
       - name: Attach to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bazzitify-*-x86_64.AppImage
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          if gh release view "$VERSION"; then
+            gh release upload "$VERSION" bazzitify-*-x86_64.AppImage --clobber
+          else
+            gh release create "$VERSION" bazzitify-*-x86_64.AppImage --generate-notes
+          fi
 
   tarball:
     needs: checks
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: System dependencies
@@ -126,12 +132,13 @@ jobs:
           cp README.md LICENSE "$DIR/" 2>/dev/null || true
           tar czf "bazzitify-${VERSION}-x86_64.tar.gz" "$DIR"
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tarball
           path: bazzitify-*.tar.gz
       - name: Attach to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bazzitify-*.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: gh release upload "$VERSION" bazzitify-*.tar.gz --clobber

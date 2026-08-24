@@ -64,6 +64,7 @@ jobs:
           install -Dm644 packaging/bazzitify.desktop "$APPDIR/bazzitify.desktop"
           install -Dm644 packaging/bazzitify.png     "$APPDIR/bazzitify.png"
           install -Dm644 packaging/bazzitify.png     "$APPDIR/usr/share/icons/hicolor/256x256/apps/bazzitify.png"
+          cp -a modules "$APPDIR/usr/share/bazzitify/modules"
       - name: Download linuxdeploy
         run: |
           curl -fsSL -o linuxdeploy \
@@ -78,6 +79,13 @@ jobs:
           ./linuxdeploy --appdir AppDir --output appimage
           mv Bazzitify-*-x86_64.AppImage bazzitify-${VERSION}-x86_64.AppImage
           ls -la *.AppImage
+      - name: Smoke test packaged AppImage
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ./bazzitify-${VERSION}-x86_64.AppImage --appimage-extract-and-run --list > module-list.txt
+          grep -q '^Available modules:' module-list.txt
+          grep -q 'gamemode' module-list.txt
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

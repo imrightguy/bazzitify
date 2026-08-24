@@ -15,10 +15,48 @@ slint::include_modules!();
 
 fn modules_dir() -> PathBuf {
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("modules");
-    if dev.is_dir() {
-        return dev;
+    modules_dir_from(
+        env::var_os("APPDIR").as_deref().map(Path::new),
+        &dev,
+        Path::new("/usr/share/bazzitify/modules"),
+    )
+}
+
+fn modules_dir_from(appdir: Option<&Path>, dev: &Path, system: &Path) -> PathBuf {
+    if let Some(appdir) = appdir {
+        let bundled = appdir.join("usr/share/bazzitify/modules");
+        if bundled.is_dir() {
+            return bundled;
+        }
     }
-    PathBuf::from("/usr/share/bazzitify/modules")
+    if dev.is_dir() {
+        return dev.to_path_buf();
+    }
+    system.to_path_buf()
+}
+
+#[cfg(test)]
+mod module_path_tests {
+    use super::*;
+
+    #[test]
+    fn appimage_modules_take_precedence_over_a_present_build_tree() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let appdir = temp.path().join("AppDir");
+        let appimage_modules = appdir.join("usr/share/bazzitify/modules");
+        let build_tree_modules = temp.path().join("source/modules");
+        std::fs::create_dir_all(&appimage_modules).expect("AppImage module directory");
+        std::fs::create_dir_all(&build_tree_modules).expect("build tree module directory");
+
+        assert_eq!(
+            modules_dir_from(
+                Some(&appdir),
+                &build_tree_modules,
+                Path::new("/missing/system/modules")
+            ),
+            appimage_modules
+        );
+    }
 }
 
 fn config_dir() -> PathBuf {

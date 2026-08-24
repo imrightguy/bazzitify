@@ -48,11 +48,22 @@ fn main() {
 }
 
 fn default_modules_dir() -> PathBuf {
-    env::current_exe()
+    let exe_dir = env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .map(|p| p.join("../modules"))
-        .unwrap_or_else(|| PathBuf::from("modules"))
+        .unwrap_or_else(|| PathBuf::from("."));
+    modules_dir_from(env::var_os("APPDIR").as_deref().map(Path::new), &exe_dir)
+}
+
+fn modules_dir_from(appdir: Option<&Path>, exe_dir: &Path) -> PathBuf {
+    if let Some(appdir) = appdir {
+        let bundled = appdir.join("usr/share/bazzitify/modules");
+        if bundled.is_dir() {
+            return bundled;
+        }
+    }
+    exe_dir
+        .join("../modules")
         .canonicalize()
         .unwrap_or_else(|_| PathBuf::from("modules"))
 }
@@ -109,4 +120,22 @@ fn do_list(config_dir: &Path) -> Result<(), ProfileError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod module_path_tests {
+    use super::*;
+
+    #[test]
+    fn appimage_modules_are_used_for_profile_export() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let appdir = temp.path().join("AppDir");
+        let modules = appdir.join("usr/share/bazzitify/modules");
+        std::fs::create_dir_all(&modules).expect("AppImage module directory");
+
+        assert_eq!(
+            modules_dir_from(Some(&appdir), temp.path().join("bin").as_path()),
+            modules
+        );
+    }
 }

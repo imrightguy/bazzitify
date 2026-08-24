@@ -8,6 +8,50 @@ export struct ModuleInfo {
     status: string,
 }
 
+// Sidebar nav row: hover highlight, selected state, optional trailing widget.
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    in property <string> status-mark: "";
+    in property <bool> mark-ok: true;
+    callback activated();
+    height: 34px;
+    border-radius: 6px;
+
+    ta := TouchArea {
+        clicked => { root.activated(); }
+        mouse-cursor: pointer;
+    }
+    background: root.selected ? #45475a : (ta.has-hover ? #313244 : transparent);
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 8px;
+        Text {
+            text: root.label;
+            color: #cdd6f4;
+            font-size: 13px;
+            vertical-alignment: center;
+            vertical-stretch: 1;
+            overflow: elide;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        if root.status-mark != "": Rectangle {
+            width: 20px;
+            border-radius: 9px;
+            background: root.mark-ok ? #a6e3a133 : #f38ba833;
+            Text {
+                text: root.status-mark;
+                color: root.mark-ok ? #a6e3a1 : #f38ba8;
+                font-size: 11px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
 // One settings-style item row: title + description left, control right.
 component SettingsItem inherits Rectangle {
     in property <string> item-title;
@@ -130,30 +174,20 @@ export component AppWindow inherits Window {
                 Rectangle { height: 6px; }
 
                 // Overview page
-                Rectangle {
-                    height: 36px;
-                    border-radius: 6px;
-                    background: root.current-page < 0 ? #45475a : transparent;
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        Text {
-                            text: "Overview";
-                            color: #cdd6f4;
-                            vertical-alignment: center;
-                        }
-                    }
-                    TouchArea {
-                        clicked => { root.select-module(-1); }
-                    }
+                NavItem {
+                    label: "Overview";
+                    selected: root.current-page < 0;
+                    activated => { root.select-module(-1); }
                 }
 
                 // Module pages
                 for m[i] in modules: Rectangle {
-                    height: 40px;
+                    height: 34px;
                     border-radius: 6px;
-                    background: root.current-page == i ? #45475a : transparent;
+                    background: root.current-page == i ? #45475a : (row-ta.has-hover ? #313244 : transparent);
                     HorizontalLayout {
                         padding-left: 10px;
+                        padding-right: 8px;
                         spacing: 8px;
                         CheckBox {
                             checked <=> m.selected;
@@ -167,16 +201,25 @@ export component AppWindow inherits Window {
                                 color: #cdd6f4;
                                 font-size: 13px;
                                 font-weight: 600;
+                                overflow: elide;
                             }
                         }
-                        Text {
-                            text: m.status == "applied" ? "✓" : (m.status == "✗ failed" ? "✗" : "");
-                            color: m.status == "applied" ? #a6e3a1 : #f38ba8;
-                            vertical-alignment: center;
+                        if m.status != "": Rectangle {
+                            width: 22px;
+                            border-radius: 10px;
+                            background: m.status == "applied" ? #a6e3a133 : #f38ba833;
+                            Text {
+                                text: m.status == "applied" ? "✓" : "✗";
+                                color: m.status == "applied" ? #a6e3a1 : #f38ba8;
+                                font-size: 11px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
                         }
                     }
-                    TouchArea {
+                    row-ta := TouchArea {
                         clicked => { root.select-module(i); }
+                        mouse-cursor: pointer;
                     }
                 }
 
@@ -248,7 +291,7 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-            }
+        }
 
             if root.current-page >= 0 && root.current-page < modules.length: Rectangle {
                 property <ModuleInfo> mod: modules[root.current-page];
@@ -328,8 +371,8 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-        }
-        }
+        } // main pane
+
         } // end HorizontalLayout (sidebar + main)
 
         // ── Log strip along the bottom, always visible ──
@@ -349,7 +392,6 @@ export component AppWindow inherits Window {
                     }
                 }
                 ScrollView {
-                    padding: 0;
                     Text {
                         text: root.log-text;
                         color: #cdd6f4;
@@ -361,3 +403,4 @@ export component AppWindow inherits Window {
             }
         }
     }
+}

@@ -61,6 +61,13 @@ for the mutable distro you already run.**
 | **filesystems** | Weekly `fstrim.timer`, zram swap (zstd, capped), lower swappiness for zram setups | ✅ full |
 | **flatpak** | Flathub remote + ProtonUp-Qt and protontricks GUI | partial |
 | **hdr-vrr** | HDR/VRR gaming helpers: compositor detection (KWin ≥6, gamescope, Hyprland, sway), KWin scripts, env vars, VRR kernel param | ✅ full¹ |
+| **codecs** | Full hw codec support: H264 decode (libva + mesa), MangoHud overlay, OBS VkCapture, vkBasalt (CAS sharpening), GStreamer vaapi | partial¹ |
+| **display-gpu-control** | LACT GPU daemon+GUI (clocks, power limit, fan curves), CoreCtrl CPU/GPU profiles, gamescope session tools | partial¹ |
+| **input-peripherals** | Xbox (xone) wireless, OpenRazer, input-remapper, OpenTabletDriver, libratbag mouse DPI/button config | partial¹ |
+| **power-profiles** | CPU governor tuning: AMD P-state / Intel p-state, energy_performance_preference=performance, power-profiles-daemon, tuned profile | partial¹ |
+| **streaming-containers** | Sunshine game stream host (firewall ports), distrobox containers, Waydroid Android container | partial¹ |
+| **test-dep-a** | Test dependency module A (no dependencies) | ✅ full |
+| **test-dep-b** | Test dependency module B (requires A) | ✅ full |
 
 <sub>¹ Package *removal* on undo is deliberately conservative — it never removes anything you might have installed yourself before running bazzitify.<br/>
 ² Uninstalling GPU drivers would leave you at a black screen; the undo refuses on purpose.</sub>

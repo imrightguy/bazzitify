@@ -112,9 +112,8 @@ fn fs_modules_discovery_works() {
 
 #[test]
 fn readme_and_fs_modules_should_match_except_known_drift() {
-    // This test documents the current drift state.
-    // When the CI workflow is implemented and README is updated, this test should be updated
-    // to expect zero drift (or the drift should be fixed).
+    // This test verifies that the README Modules table stays in sync with modules/ directory.
+    // The CI workflow (.github/workflows/readme-module-check.yml) enforces this on every push/PR.
 
     let readme_modules = parse_readme_modules_table(Path::new("README.md"));
     let fs_modules = get_fs_modules(Path::new("modules"));
@@ -125,33 +124,31 @@ fn readme_and_fs_modules_should_match_except_known_drift() {
     let missing_from_readme: Vec<_> = fs_set.difference(&readme_set).collect();
     let stale_in_readme: Vec<_> = readme_set.difference(&fs_set).collect();
 
-    // Currently there IS drift - this test documents it
-    // TODO: When README is updated, change these assertions to expect empty vecs
+    // README and modules/ should be in sync - no missing, no stale
     println!("Missing from README: {:?}", missing_from_readme);
     println!("Stale in README: {:?}", stale_in_readme);
 
-    // Known missing modules (not yet documented in README)
-    let known_missing = [
-        "codecs",
-        "display-gpu-control",
-        "input-peripherals",
-        "power-profiles",
-        "streaming-containers",
-        "test-dep-a",
-        "test-dep-b",
-    ];
-    for m in &known_missing {
-        assert!(
-            missing_from_readme.iter().any(|s| *s == m),
-            "Expected {} to be missing from README",
-            m
-        );
-    }
+    assert!(
+        missing_from_readme.is_empty(),
+        "All modules in modules/ should be documented in README. Missing: {:?}",
+        missing_from_readme
+    );
 
-    // No stale modules expected (all README modules should exist in fs)
     assert!(
         stale_in_readme.is_empty(),
         "No stale modules expected in README, but found: {:?}",
         stale_in_readme
+    );
+
+    // Sanity check: we should have at least the original 8 + the 7 newly added = 15 modules
+    assert!(
+        readme_modules.len() >= 15,
+        "Should have at least 15 modules in README, got {}",
+        readme_modules.len()
+    );
+    assert!(
+        fs_modules.len() >= 15,
+        "Should have at least 15 modules in modules/, got {}",
+        fs_modules.len()
     );
 }

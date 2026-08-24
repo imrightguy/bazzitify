@@ -1,0 +1,87 @@
+name: README Module Table Check
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'README.md'
+      - 'modules/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'README.md'
+      - 'modules/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readme-module-check:
+    name: Check README Modules table vs modules/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract module names from README table
+        id: readme
+        run: |
+          # Extract module names from the markdown table in README.md
+          # The table format: | **module-name** | description | undo |
+          # We match lines with | **name** | and extract the name
+          grep -E '^\| \*\*[a-z0-9-]+\*\* \|' README.md \
+            | sed -E 's/^\| \*\*([a-z0-9-]+)\*\* \|.*/\1/' \
+            | sort > /tmp/readme_modules.txt
+          echo "README modules found: $(wc -l < /tmp/readme_modules.txt)"
+          cat /tmp/readme_modules.txt
+
+      - name: Extract module names from modules/ directory
+        id: modules
+        run: |
+          # List all .sh files in modules/ (excluding lib/)
+          # Extract the base name without .sh extension
+          find modules/ -maxdepth 1 -name '*.sh' -type f \
+            | sed -E 's|modules/([^/]+)\.sh|\1|' \
+            | sort > /tmp/dir_modules.txt
+          echo "Directory modules found: $(wc -l < /tmp/dir_modules.txt)"
+          cat /tmp/dir_modules.txt
+
+      - name: Check for missing modules in README
+        run: |
+          # Modules in directory but not in README
+          MISSING=$(comm -13 /tmp/readme_modules.txt /tmp/dir_modules.txt)
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing from README Modules table:"
+            echo "$MISSING" | sed 's/^/  /'
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ No modules missing from README"
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+        id: check_missing
+
+      - name: Check for stale entries in README
+        run: |
+          # Modules in README but not in directory
+          STALE=$(comm -23 /tmp/readme_modules.txt /tmp/dir_modules.txt)
+          if [ -n "$STALE" ]; then
+            echo "::error::Stale entries in README Modules table (module no longer exists):"
+            echo "$STALE" | sed 's/^/  /'
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ No stale entries in README"
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+        id: check_stale
+
+      - name: Fail if discrepancies found
+        if: steps.check_missing.outputs.missing == 'true' || steps.check_stale.outputs.stale == 'true'
+        run: |
+          echo "❌ README Modules table is out of sync with modules/ directory"
+          echo "Run the workflow locally or fix the README.md table to match the modules/ directory."
+          exit 1
+
+      - name: Success - README and modules/ are in sync
+        if: steps.check_missing.outputs.missing == 'false' && steps.check_stale.outputs.stale == 'false'
+        run: |
+          echo "✅ README Modules table is in sync with modules/ directory"

@@ -124,19 +124,15 @@ impl Translator {
     /// Translate a key using the current locale with fallback to default.
     pub fn t(&self, key: &str) -> String {
         // Try current locale first
-        if let Some(map) = self.maps.get(&self.current_locale) {
-            if let Some(value) = map.get(key) {
-                return value.to_string();
-            }
+        if let Some(value) = self.maps.get(&self.current_locale).and_then(|m| m.get(key)) {
+            return value.to_string();
         }
 
         // Fallback to default locale
-        if self.current_locale != DEFAULT_LOCALE {
-            if let Some(map) = self.maps.get(DEFAULT_LOCALE) {
-                if let Some(value) = map.get(key) {
-                    return value.to_string();
-                }
-            }
+        if self.current_locale != DEFAULT_LOCALE
+            && let Some(value) = self.maps.get(DEFAULT_LOCALE).and_then(|m| m.get(key))
+        {
+            return value.to_string();
         }
 
         // Key not found - return key itself for debugging
@@ -146,19 +142,22 @@ impl Translator {
     /// Translate a key with argument interpolation.
     pub fn t_with_args(&self, key: &str, args: &[(&str, &str)]) -> String {
         // Try current locale first
-        if let Some(map) = self.maps.get(&self.current_locale) {
-            if let Some(value) = map.get_with_args(key, args) {
-                return value;
-            }
+        if let Some(value) = self
+            .maps
+            .get(&self.current_locale)
+            .and_then(|m| m.get_with_args(key, args))
+        {
+            return value;
         }
 
         // Fallback to default locale
-        if self.current_locale != DEFAULT_LOCALE {
-            if let Some(map) = self.maps.get(DEFAULT_LOCALE) {
-                if let Some(value) = map.get_with_args(key, args) {
-                    return value;
-                }
-            }
+        if self.current_locale != DEFAULT_LOCALE
+            && let Some(value) = self
+                .maps
+                .get(DEFAULT_LOCALE)
+                .and_then(|m| m.get_with_args(key, args))
+        {
+            return value;
         }
 
         // Key not found - return key itself for debugging

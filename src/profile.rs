@@ -153,10 +153,12 @@ impl Profile {
         for entry in fs::read_dir(config_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    profiles.push(stem.to_string());
-                }
+            if let Some(stem) = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|_| path.extension().and_then(|e| e.to_str()) == Some("toml"))
+            {
+                profiles.push(stem.to_string());
             }
         }
         profiles.sort();

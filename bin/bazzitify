@@ -228,7 +228,7 @@ run_module() {
   local name="$1"; shift || true
   local f="$MODULES_DIR/$name.sh"
   if [[ ! -f "$f" ]]; then
-    echo "Unknown module: $name" >&2; exit 1
+    echo "Unknown module: $name" >&2; exit 2
   fi
   if [[ $JSON_MODE -eq 0 ]]; then
     echo "==> $name"
@@ -272,13 +272,17 @@ run_module() {
     output_json "$result"
   fi
 
-  return $exit_code
+  # Map any execution failure to exit code 3
+  if [[ $exit_code -ne 0 ]]; then
+    return 3
+  fi
+  return 0
 }
 
 undo_module() {
   local name="$1"
   local f="$MODULES_DIR/$name.sh"
-  [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 1; }
+  [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 2; }
   # shellcheck disable=SC1090
   source "$f"
   local start_time
@@ -315,7 +319,11 @@ undo_module() {
     output_json "$result"
   fi
 
-  return $exit_code
+  # Map any execution failure to exit code 3
+  if [[ $exit_code -ne 0 ]]; then
+    return 3
+  fi
+  return 0
 }
 
 dry_run_module() {

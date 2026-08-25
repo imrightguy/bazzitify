@@ -166,8 +166,9 @@ and wires up Apply / Undo buttons. No registration, no manifest.
 | Distro | Status |
 |---|---|
 | **Arch / CachyOS** | ✅ primary target |
+| **Fedora** | 🟢 supported (dnf) |
 | Debian / Ubuntu bases | 🟡 `gaming-packages` has an apt branch |
-| openSUSE / Fedora | 🔜 planned |
+| openSUSE | 🔜 planned |
 
 ## 🗺️ Roadmap
 

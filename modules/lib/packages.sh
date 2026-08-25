@@ -393,6 +393,7 @@ _resolve_fedora() {
         nvidia-dkms) echo "akmod-nvidia xorg-x11-drv-nvidia xorg-x11-drv-nvidia-libs.i686" ;;
         amd-driver) echo "mesa-vulkan-drivers mesa-vulkan-drivers.i686 mesa-dri-drivers mesa-dri-drivers.i686" ;;
         intel-driver) echo "mesa-vulkan-drivers mesa-vulkan-drivers.i686 mesa-dri-drivers mesa-dri-drivers.i686 intel-media-driver intel-media-driver.i686" ;;
+        intel-media-driver) echo "intel-media-driver intel-media-driver.i686" ;;
         opencl-amd) echo "mesa-libOpenCL clinfo" ;;
         opencl-nvidia) echo "xorg-x11-drv-nvidia-libs xorg-x11-drv-nvidia-libs.i686" ;;
         rocm) echo "rocm-opencl-runtime rocm-hip-runtime" ;;
@@ -439,15 +440,27 @@ _resolve_fedora() {
         auto-cpufreq) echo "auto-cpufreq" ;;
 
         # HDR/VRR
-        kwin-effects-hdr) echo "kwin" ;;
-        color-management) echo "colord" ;;
-        vkbasalt) echo "vkbasalt" ;;
+                kwin-effects-hdr) echo "kwin" ;;
+                color-management) echo "colord" ;;
+                libdisplay-info) echo "libdisplay-info" ;;
+                vkbasalt) echo "vkbasalt" ;;
+                lib32-vkbasalt) echo "vkbasalt.i686" ;;
 
-        sysctl) echo "procps-ng" ;;
-        kernel-params) echo "grub2" ;;
-        
-        gamemoded) echo "gamemode" ;;
-        lib32-gamemode) echo "gamemode.i686" ;;
+                sysctl) echo "procps-ng" ;;
+                kernel-params) echo "grub2" ;;
+
+                gamemoded) echo "gamemode" ;;
+                lib32-gamemode) echo "gamemode.i686" ;;
+                lib32-mangohud) echo "mangohud.i686" ;;
+
+                # Codecs & media (additional)
+                libva-mesa-driver) echo "mesa-libva" ;;
+                gstreamer-vaapi) echo "gstreamer1-vaapi" ;;
+                lib32-obs-vkcapture) echo "obs-vkcapture.i686" ;;
+
+                # Display & GPU control
+                lact) echo "lact" ;;
+                corectrl) echo "corectrl" ;;
         
         flatpak) echo "flatpak" ;;
         flathub) echo "flatpak" ;;

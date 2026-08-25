@@ -47,6 +47,7 @@ fn parse_readme_modules_table(readme_path: &Path) -> Vec<String> {
 }
 
 /// Get module names from modules/ directory (basename without .sh)
+/// Excludes test-dep-* fixtures which are not user-facing modules
 fn get_fs_modules(modules_dir: &Path) -> Vec<String> {
     let mut modules = Vec::new();
     for entry in fs::read_dir(modules_dir).expect("modules/ should be readable") {
@@ -55,6 +56,10 @@ fn get_fs_modules(modules_dir: &Path) -> Vec<String> {
         if path.extension().and_then(|e| e.to_str()) == Some("sh")
             && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
         {
+            // Skip test fixtures
+            if stem.starts_with("test-dep-") {
+                continue;
+            }
             modules.push(stem.to_string());
         }
     }
@@ -140,15 +145,15 @@ fn readme_and_fs_modules_should_match_except_known_drift() {
         stale_in_readme
     );
 
-    // Sanity check: we should have at least the original 8 + the 7 newly added = 15 modules
+    // Sanity check: we should have the 13 real modules (excluding test-dep-* fixtures)
     assert!(
-        readme_modules.len() >= 15,
-        "Should have at least 15 modules in README, got {}",
+        readme_modules.len() >= 13,
+        "Should have at least 13 modules in README, got {}",
         readme_modules.len()
     );
     assert!(
-        fs_modules.len() >= 15,
-        "Should have at least 15 modules in modules/, got {}",
+        fs_modules.len() >= 13,
+        "Should have at least 13 modules in modules/, got {}",
         fs_modules.len()
     );
 }

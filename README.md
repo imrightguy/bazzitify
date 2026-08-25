@@ -53,21 +53,19 @@ for the mutable distro you already run.**
 
 | Module | What it does | Undo |
 |---|---|---|
-| **gaming-packages** | Steam, Lutris, MangoHud, gamescope, gamemode via pacman/apt | partial¹ |
-| **sysctl** | VM & latency tuning: swappiness, `vm.max_map_count` for Proton, fq + BBR congestion control (`/etc/sysctl.d/99-bazzitify-gaming.conf`) | ✅ full |
-| **gpu-drivers** | Hardware auto-detected via `lspci`: Mesa + RADV/VAAPI (AMD) or nvidia-utils + 32-bit libs (NVIDIA) | by design² |
-| **kernel-params** | Bootloader-aware (systemd-boot & GRUB): `nowatchdog`, `nmi_watchdog=0`, `split_lock_detect=off` — tagged entries, idempotent | ✅ idempotent |
-| **services** | GameMode daemon install + user service enablement | ✅ full |
-| **filesystems** | Weekly `fstrim.timer`, zram swap (zstd, capped), lower swappiness for zram setups | ✅ full |
-| **flatpak** | Flathub remote + ProtonUp-Qt and protontricks GUI | partial |
-| **hdr-vrr** | HDR/VRR gaming helpers: compositor detection (KWin ≥6, gamescope, Hyprland, sway), KWin scripts, env vars, VRR kernel param | ✅ full¹ |
-| **codecs** | Full hw codec support: H264 decode (libva + mesa), MangoHud overlay, OBS VkCapture, vkBasalt (CAS sharpening), GStreamer vaapi | partial¹ |
-| **display-gpu-control** | LACT GPU daemon+GUI (clocks, power limit, fan curves), CoreCtrl CPU/GPU profiles, gamescope session tools | partial¹ |
-| **input-peripherals** | Xbox (xone) wireless, OpenRazer, input-remapper, OpenTabletDriver, libratbag mouse DPI/button config | partial¹ |
-| **power-profiles** | CPU governor tuning: AMD P-state / Intel p-state, energy_performance_preference=performance, power-profiles-daemon, tuned profile | partial¹ |
-| **streaming-containers** | Sunshine game stream host (firewall ports), distrobox containers, Waydroid Android container | partial¹ |
-| **test-dep-a** | Test dependency module A (no dependencies) | ✅ full |
-| **test-dep-b** | Test dependency module B (requires A) | ✅ full |
+| **codecs** | Codecs & capture — full hw codec support, MangoHud overlay, OBS vkcapture, vkBasalt | partial¹ |
+| **display-gpu-control** | Display & GPU control — LACT, CoreCtrl, gamescope session tools | partial¹ |
+| **filesystems** | Filesystem — weekly SSD TRIM timer + zram swap config | ✅ full |
+| **flatpak** | Flatpak — Flathub remote + gaming apps (ProtonPlus, Bottles optional) | partial |
+| **gaming-packages** | Install gaming packages (Steam, Lutris, MangoHud, gamescope, gamemode) | partial¹ |
+| **gpu-drivers** | GPU drivers — Mesa/Vulkan for AMD, nvidia-utils for NVIDIA (auto-detected) | by design² |
+| **hdr-vrr** | HDR/VRR gaming helpers — compositor detection, opt-in env vars, KWin scripts, gamescope stack (Bazzite parity) | ✅ full¹ |
+| **input-peripherals** | Input peripherals — Xbox (xone), Razer, and tablet driver support | partial¹ |
+| **kernel-params** | Kernel params — nowatchdog, split_lock_detect=off, amdgpu overrides (bootloader-aware) | ✅ idempotent |
+| **power-profiles** | CPU power profiles / governor tuning for gaming (performance, AMD P-state, Intel p-state, power-profiles-daemon) | partial¹ |
+| **services** | Services — enable gamemode/gamemoded socket, disable useless-for-gaming services | ✅ full |
+| **streaming-containers** | Streaming & containers — Sunshine stream host, distrobox, waydroid | partial¹ |
+| **sysctl** | sysctl latency/VM tweaks for gaming | ✅ full |
 
 <sub>¹ Package *removal* on undo is deliberately conservative — it never removes anything you might have installed yourself before running bazzitify.<br/>
 ² Uninstalling GPU drivers would leave you at a black screen; the undo refuses on purpose.</sub>

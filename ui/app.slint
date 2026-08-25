@@ -57,7 +57,7 @@ component NavItem inherits Rectangle {
 
 
 export component AppWindow inherits Window {
-    title: "bazzitify";
+    title: @tr("app-title");
     min-width: 760px;
     min-height: 500px;
     preferred-width: 1150px;
@@ -124,7 +124,7 @@ export component AppWindow inherits Window {
                     spacing: 8px;
 
                     Text {
-                        text: "bazzitify";
+                        text: @tr("app-title");
                         font-size: 18px;
                         font-weight: 800;
                         color: Palette.accent;
@@ -140,22 +140,22 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: 6px;
                         Button {
-                            text: "Export";
+                            text: @tr("sidebar-export");
                             enabled: !root.running;
                             clicked => { root.export-profile(root.selected-profile); }
                         }
                         Button {
-                            text: "Import";
+                            text: @tr("sidebar-import");
                             enabled: !root.running;
                             clicked => { root.import-profile(""); }
                         }
                         Button {
-                            text: "Refresh";
+                            text: @tr("sidebar-refresh");
                             enabled: !root.running;
                             clicked => { root.load-profiles(); }
                         }
                         Button {
-                            text: "Re-run Wizard";
+                            text: @tr("sidebar-rerun-wizard");
                             enabled: !root.running;
                             clicked => { root.rerun-wizard(); }
                         }
@@ -164,7 +164,7 @@ export component AppWindow inherits Window {
                     Rectangle { height: 4px; }
 
                     NavItem {
-                        label: "Overview";
+                        label: @tr("sidebar-overview");
                         selected: root.current-page < 0;
                         activated => { root.select-module(-1); }
                     }
@@ -216,26 +216,26 @@ export component AppWindow inherits Window {
                     Rectangle { vertical-stretch: 1; }
 
                     CheckBox {
-                        text: "dry-run";
+                        text: @tr("sidebar-dry-run");
                         checked <=> root.dry-run;
                         enabled: !root.running;
                     }
                     HorizontalLayout {
                         spacing: 6px;
                         Button {
-                            text: "Apply Selected";
+                            text: @tr("sidebar-apply-selected");
                             primary: true;
                             enabled: !root.running;
                             clicked => { root.apply-selected(); }
                         }
                         Button {
-                            text: "Undo Selected";
+                            text: @tr("sidebar-undo-selected");
                             enabled: !root.running;
                             clicked => { root.undo-selected(); }
                         }
                     }
                     Text {
-                        text: root.running ? "⟳ working…" : "";
+                        text: root.running ? @tr("sidebar-status-working") : "";
                         color: Palette.yellow;
                         font-size: 11px;
                     }
@@ -298,13 +298,13 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Welcome to bazzitify";
+                                    text: @tr("wizard-welcome-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.text;
                                 }
                                 Text {
-                                    text: "This wizard will help you set up your system for optimal gaming performance.\n\nIt will detect your Linux distribution, suggest relevant optimization modules, and let you preview the changes before applying them.";
+                                    text: @tr("wizard-welcome-description");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
@@ -314,12 +314,12 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Skip Wizard";
+                                        text: @tr("wizard-welcome-skip");
                                         enabled: !root.running;
                                         clicked => { root.wizard-skip(); }
                                     }
                                     Button {
-                                        text: "Get Started";
+                                        text: @tr("wizard-welcome-get-started");
                                         primary: true;
                                         enabled: !root.running;
                                         clicked => { root.wizard-next(); }
@@ -333,13 +333,13 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Detecting Distribution";
+                                    text: @tr("wizard-distro-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.text;
                                 }
                                 Text {
-                                    text: "We detected your distribution as:";
+                                    text: @tr("wizard-distro-detected");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
@@ -357,7 +357,7 @@ export component AppWindow inherits Window {
                                             height: 48px;
                                             background: Palette.accent;
                                             border-radius: 24px;
-                                            Text { text: "🐧"; font-size: 24px; horizontal-alignment: center; vertical-alignment: center; }
+                                            Text { text: @tr("emoji-linux"); font-size: 24px; horizontal-alignment: center; vertical-alignment: center; }
                                         }
                                         VerticalLayout {
                                             alignment: center;
@@ -368,7 +368,7 @@ export component AppWindow inherits Window {
                                                 color: Palette.text;
                                             }
                                             Text {
-                                                text: "Based on /etc/os-release";
+                                                text: @tr("wizard-distro-source");
                                                 font-size: 11px;
                                                 color: Palette.faint;
                                             }
@@ -376,7 +376,7 @@ export component AppWindow inherits Window {
                                     }
                                 }
                                 Text {
-                                    text: "Is this correct? If not, you can still continue — module suggestions will be based on this detection.";
+                                    text: @tr("wizard-distro-confirm");
                                     color: Palette.faint;
                                     font-size: 12px;
                                     wrap: word-wrap;
@@ -386,12 +386,12 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Back";
+                                        text: @tr("wizard-distro-back");
                                         enabled: !root.running;
                                         clicked => { root.wizard-prev(); }
                                     }
                                     Button {
-                                        text: "Continue";
+                                        text: @tr("wizard-distro-continue");
                                         primary: true;
                                         enabled: !root.running;
                                         clicked => { root.wizard-next(); }
@@ -405,13 +405,13 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Select Modules to Apply";
+                                    text: @tr("wizard-modules-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.text;
                                 }
                                 Text {
-                                    text: "These modules are recommended for your distribution. Uncheck any you don't want.";
+                                    text: @tr("wizard-modules-description");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
@@ -448,7 +448,7 @@ export component AppWindow inherits Window {
                                         VerticalLayout {
                                             alignment: center;
                                             Text {
-                                                text: "💡 " + m.reason;
+                                                text: @tr("wizard-modules-reason-prefix") + " " + m.reason;
                                                 color: Palette.yellow;
                                                 font-size: 11px;
                                                 wrap: word-wrap;
@@ -462,12 +462,12 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Back";
+                                        text: @tr("wizard-modules-back");
                                         enabled: !root.running;
                                         clicked => { root.wizard-prev(); }
                                     }
                                     Button {
-                                        text: "Preview Changes";
+                                        text: @tr("wizard-modules-preview");
                                         primary: true;
                                         enabled: !root.running;
                                         clicked => { root.wizard-next(); }
@@ -481,13 +481,13 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Dry-Run Preview";
+                                    text: @tr("wizard-dryrun-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.text;
                                 }
                                 Text {
-                                    text: "This is what will happen when you apply the selected modules:";
+                                    text: @tr("wizard-dryrun-description");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
@@ -509,12 +509,12 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Back";
+                                        text: @tr("wizard-dryrun-back");
                                         enabled: !root.running;
                                         clicked => { root.wizard-prev(); }
                                     }
                                     Button {
-                                        text: "Apply Changes";
+                                        text: @tr("wizard-dryrun-apply");
                                         primary: true;
                                         enabled: !root.running;
                                         clicked => { root.wizard-next(); }
@@ -528,19 +528,19 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Ready to Apply";
+                                    text: @tr("wizard-confirm-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.text;
                                 }
                                 Text {
-                                    text: "Click \"Apply\" to run the selected modules. This may require your password for sudo operations.";
+                                    text: @tr("wizard-confirm-description");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
                                 }
                                 CheckBox {
-                                    text: "I understand this will modify system configuration";
+                                    text: @tr("wizard-confirm-checkbox");
                                     checked <=> root.wizard-confirmed;
                                     font-size: 13px;
                                 }
@@ -549,12 +549,12 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Back";
+                                        text: @tr("wizard-confirm-back");
                                         enabled: !root.running;
                                         clicked => { root.wizard-prev(); }
                                     }
                                     Button {
-                                        text: "Apply";
+                                        text: @tr("wizard-confirm-apply");
                                         primary: true;
                                         enabled: root.wizard-confirmed && !root.running;
                                         clicked => { root.wizard-confirm(); }
@@ -568,13 +568,13 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {
-                                    text: "Setup Complete!";
+                                    text: @tr("wizard-complete-title");
                                     font-size: 28px;
                                     font-weight: 800;
                                     color: Palette.green;
                                 }
                                 Text {
-                                    text: "Your system has been optimized for gaming. You can now use bazzitify to manage individual modules or run the wizard again later.";
+                                    text: @tr("wizard-complete-description");
                                     color: Palette.subtext;
                                     font-size: 14px;
                                     wrap: word-wrap;
@@ -584,7 +584,7 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     alignment: end;
                                     Button {
-                                        text: "Finish";
+                                        text: @tr("wizard-complete-finish");
                                         primary: true;
                                         enabled: !root.running;
                                         clicked => { root.wizard-confirm(); }
@@ -602,13 +602,13 @@ export component AppWindow inherits Window {
                         spacing: 10px;
 
                         Text {
-                            text: "Modules";
+                            text: @tr("overview-title");
                             font-size: 22px;
                             font-weight: 800;
                             color: Palette.text;
                         }
                         Text {
-                            text: "Select a module in the sidebar to see what it does before applying.";
+                            text: @tr("overview-description");
                             color: Palette.subtext;
                             font-size: 13px;
                             wrap: word-wrap;
@@ -648,7 +648,7 @@ export component AppWindow inherits Window {
                                 VerticalLayout {
                                     alignment: center;
                                     Button {
-                                        text: "Open";
+                                        text: @tr("sidebar-module-open");
                                         clicked => { root.select-module(i); }
                                     }
                                 }
@@ -683,7 +683,7 @@ export component AppWindow inherits Window {
                                         width: 92px;
                                         height: 22px;
                                         Text {
-                                            text: mod.status == "" ? "not applied" : mod.status;
+                                            text: mod.status == "" ? @tr("module-status-not-applied") : mod.status;
                                             color: Palette.text;
                                             font-size: 11px;
                                             horizontal-alignment: center;
@@ -695,7 +695,7 @@ export component AppWindow inherits Window {
                                 VerticalLayout {
                                     alignment: center;
                                     CheckBox {
-                                        text: "select";
+                                        text: @tr("sidebar-select-checkbox");
                                         checked <=> mod.selected;
                                         enabled: !root.running;
                                     }
@@ -712,7 +712,7 @@ export component AppWindow inherits Window {
                             Rectangle { height: 6px; }
 
                             Text {
-                                text: "What this module does";
+                                text: @tr("module-details-heading");
                                 font-size: 15px;
                                 font-weight: 700;
                                 color: Palette.accent;
@@ -730,12 +730,12 @@ export component AppWindow inherits Window {
                                 spacing: 8px;
                                 alignment: end;
                                 Button {
-                                    text: "Undo";
+                                    text: @tr("module-detail-undo");
                                     enabled: !root.running;
                                     clicked => { root.undo-module(root.current-page); }
                                 }
                                 Button {
-                                    text: "Apply";
+                                    text: @tr("module-detail-apply");
                                     primary: true;
                                     enabled: !root.running;
                                     clicked => { root.apply-module(root.current-page); }
@@ -781,7 +781,7 @@ export component AppWindow inherits Window {
                     padding-top: 6px;
                     padding-bottom: 2px;
                     Text {
-                        text: "log";
+                        text: @tr("log-label");
                         font-size: 10px;
                         letter-spacing: 2px;
                         color: Palette.faint;
@@ -789,7 +789,7 @@ export component AppWindow inherits Window {
                     }
                     Rectangle {}
                     Text {
-                        text: root.running ? "⟳ working…" : "";
+                        text: root.running ? @tr("log-status-working") : "";
                         color: Palette.yellow;
                         font-size: 10px;
                         vertical-alignment: center;

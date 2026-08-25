@@ -66,7 +66,7 @@ for the mutable distro you already run.**
 | **services** | Services — enable gamemode/gamemoded socket, disable useless-for-gaming services | ✅ full |
 | **streaming-containers** | Streaming & containers — Sunshine stream host, distrobox, waydroid | partial¹ |
 | **sysctl** | sysctl latency/VM tweaks for gaming | ✅ full |
-| **wayland-gaming-session** | Wayland gaming session — gamescope session entry + Wayland gaming env vars (SDL, DXVK, VKD3D, RADV) | ✅ full |
+| **wayland-gaming-session** | Wayland gaming session — gamescope session entry + Wayland gaming env vars (opt-in, reversible) | ✅ full |
 
 <sub>¹ Package *removal* on undo is deliberately conservative — it never removes anything you might have installed yourself before running bazzitify.<br/>
 ² Uninstalling GPU drivers would leave you at a black screen; the undo refuses on purpose.</sub>

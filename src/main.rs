@@ -4,6 +4,10 @@ use bazzitify::distro::{detect_distro, distro_pretty_name};
 use bazzitify::module::{Module, ModuleGraph};
 use bazzitify::profile::{Profile, ProfileError};
 use bazzitify::runner::{RunOpts, run_module_opts};
+use bazzitify::wizard::{
+    generate_dry_run_preview, get_suggested_modules_for_distro, mark_wizard_complete,
+    should_show_wizard, wizard_marker_path,
+};
 use serde::Serialize;
 use slint::Model;
 use std::env;
@@ -89,8 +93,8 @@ struct ModuleJson {
 struct ApplyResultJson {
     module: String,
     success: bool,
-    stdout: String,
-    stderr: String,
+    output: String,
+    changed_files: Vec<String>,
     duration_ms: u64,
 }
 
@@ -445,56 +449,70 @@ fn cli_apply_all(dir: &Path, discovered: &[Module], json_mode: JsonMode) -> i32 
     let mut exit_code = 0;
     let mut results = Vec::new();
 
-    if let Ok(sorted) = ModuleGraph::topological_sort(discovered) {
-        for m in sorted {
-            if m.has_apply {
-                match run_module_opts(dir, &m, "apply", RunOpts::default()) {
-                    Ok(r) => {
-                        if !r.success {
-                            exit_code = 1;
-                        }
-                        if json_mode != JsonMode::Off {
-                            // Split stdout/stderr from combined output
-                            // For simplicity, we'll put all in stdout and leave stderr empty
-                            // A more sophisticated version could separate them
-                            results.push(ApplyResultJson {
-                                module: m.name.clone(),
-                                success: r.success,
-                                stdout: r.output.clone(),
-                                stderr: String::new(),
-                                duration_ms: r.duration_ms,
-                            });
-                        } else {
-                            for line in r.output.lines() {
-                                println!("{}", line);
+    match ModuleGraph::topological_sort(discovered) {
+        Ok(sorted) => {
+            for m in sorted {
+                if m.has_apply {
+                    match run_module_opts(dir, &m, "apply", RunOpts::default()) {
+                        Ok(r) => {
+                            if !r.success {
+                                exit_code = 1;
                             }
-                            if r.success {
-                                println!("✓ {} ok", m.name);
+                            if json_mode != JsonMode::Off {
+                                // Split stdout/stderr from combined output
+                                // For simplicity, we'll put all in stdout and leave stderr empty
+                                // A more sophisticated version could separate them
+                                results.push(ApplyResultJson {
+                                    module: m.name.clone(),
+                                    success: r.success,
+                                    output: r.output.clone(),
+                                    changed_files: Vec::new(),
+                                    duration_ms: r.duration_ms,
+                                });
                             } else {
-                                eprintln!("✗ {} failed", m.name);
+                                for line in r.output.lines() {
+                                    println!("{}", line);
+                                }
+                                if r.success {
+                                    println!("✓ {} ok", m.name);
+                                } else {
+                                    eprintln!("✗ {} failed", m.name);
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        exit_code = 1;
-                        if json_mode != JsonMode::Off {
-                            results.push(ApplyResultJson {
-                                module: m.name.clone(),
-                                success: false,
-                                stdout: String::new(),
-                                stderr: format!("error running {}: {}", m.name, e),
-                                duration_ms: 0,
-                            });
-                        } else {
-                            eprintln!("error running {}: {}", m.name, e);
+                        Err(e) => {
+                            exit_code = 1;
+                            if json_mode != JsonMode::Off {
+                                results.push(ApplyResultJson {
+                                    module: m.name.clone(),
+                                    success: false,
+                                    output: String::new(),
+                                    changed_files: Vec::new(),
+                                    duration_ms: 0,
+                                });
+                            } else {
+                                eprintln!("error running {}: {}", m.name, e);
+                            }
                         }
                     }
                 }
             }
         }
+        Err(e) => {
+            // Dependency error: cyclic dependency or missing dependency
+            exit_code = 3;
+            if json_mode != JsonMode::Off {
+                let err = serde_json::json!({
+                    "error": e.to_string()
+                });
+                output_json(&err, json_mode);
+            } else {
+                eprintln!("Dependency error: {}", e);
+            }
+        }
     }
 
-    if json_mode != JsonMode::Off {
+    if json_mode != JsonMode::Off && exit_code == 0 {
         output_json(&results, json_mode);
     }
     exit_code
@@ -513,8 +531,8 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
                         let result = ApplyResultJson {
                             module: m.name.clone(),
                             success: r.success,
-                            stdout: r.output.clone(),
-                            stderr: String::new(),
+                            output: r.output.clone(),
+                            changed_files: Vec::new(),
                             duration_ms: r.duration_ms,
                         };
                         output_json(&result, json_mode);
@@ -530,8 +548,8 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
                         let result = ApplyResultJson {
                             module: m.name.clone(),
                             success: false,
-                            stdout: String::new(),
-                            stderr: format!("error running {}: {}", m.name, e),
+                            output: String::new(),
+                            changed_files: Vec::new(),
                             duration_ms: 0,
                         };
                         output_json(&result, json_mode);
@@ -545,8 +563,8 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
                 let result = ApplyResultJson {
                     module: m.name.clone(),
                     success: false,
-                    stdout: String::new(),
-                    stderr: format!("Module {} has no apply function", name),
+                    output: String::new(),
+                    changed_files: Vec::new(),
                     duration_ms: 0,
                 };
                 output_json(&result, json_mode);
@@ -560,8 +578,8 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
             let result = ApplyResultJson {
                 module: name.into(),
                 success: false,
-                stdout: String::new(),
-                stderr: format!("Unknown module: {}", name),
+                output: String::new(),
+                changed_files: Vec::new(),
                 duration_ms: 0,
             };
             output_json(&result, json_mode);
@@ -586,8 +604,8 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
                         let result = ApplyResultJson {
                             module: m.name.clone(),
                             success: r.success,
-                            stdout: r.output.clone(),
-                            stderr: String::new(),
+                            output: r.output.clone(),
+                            changed_files: Vec::new(),
                             duration_ms: r.duration_ms,
                         };
                         output_json(&result, json_mode);
@@ -603,8 +621,8 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
                         let result = ApplyResultJson {
                             module: m.name.clone(),
                             success: false,
-                            stdout: String::new(),
-                            stderr: format!("error running {}: {}", m.name, e),
+                            output: String::new(),
+                            changed_files: Vec::new(),
                             duration_ms: 0,
                         };
                         output_json(&result, json_mode);
@@ -618,8 +636,8 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
                 let result = ApplyResultJson {
                     module: m.name.clone(),
                     success: false,
-                    stdout: String::new(),
-                    stderr: format!("Module {} has no undo function", name),
+                    output: String::new(),
+                    changed_files: Vec::new(),
                     duration_ms: 0,
                 };
                 output_json(&result, json_mode);
@@ -633,8 +651,8 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
             let result = ApplyResultJson {
                 module: name.into(),
                 success: false,
-                stdout: String::new(),
-                stderr: format!("Unknown module: {}", name),
+                output: String::new(),
+                changed_files: Vec::new(),
                 duration_ms: 0,
             };
             output_json(&result, json_mode);
@@ -668,7 +686,7 @@ fn main() {
             Some("export") => {
                 if args.len() < 4 {
                     print_usage();
-                    1
+                    2
                 } else {
                     if let Err(e) = cli_export(&discovered, &args[3]) {
                         if json_mode != JsonMode::Off {
@@ -686,7 +704,7 @@ fn main() {
             Some("import") => {
                 if args.len() < 4 {
                     print_usage();
-                    1
+                    2
                 } else {
                     if let Err(e) = cli_import(&args[3]) {
                         if json_mode != JsonMode::Off {
@@ -716,7 +734,7 @@ fn main() {
             }
             _ => {
                 print_usage();
-                1
+                2
             }
         },
         Some("--list") | Some("-l") => {
@@ -754,6 +772,19 @@ fn run_gui() {
 
     let app = AppWindow::new().expect("failed to create window");
     app.set_distro_info(distro_pretty_name().into());
+
+    // Check if wizard should be shown
+    let marker_path = wizard_marker_path();
+    let show_wizard = should_show_wizard(&marker_path);
+    app.set_wizard_active(show_wizard);
+    app.set_wizard_step(0);
+    app.set_wizard_confirmed(false);
+
+    if show_wizard {
+        // Detect distro for the wizard
+        let _distro = detect_distro();
+        app.set_wizard_distro(slint::SharedString::from(distro_pretty_name()));
+    }
 
     // Restore applied-state from previous runs
     let applied = bazzitify::state::load(&bazzitify::state::state_path());
@@ -1019,6 +1050,171 @@ fn run_gui() {
                         profiles.into_iter().map(|s| s.into()).collect();
                     app.set_profiles(profile_vec.as_slice().into());
                 }
+            }
+        });
+    }
+
+    // Wizard callbacks
+    {
+        let handle = handle.clone();
+        let _marker_path = wizard_marker_path();
+        app.on_wizard_next(move || {
+            if let Some(app) = handle.upgrade() {
+                let step = app.get_wizard_step();
+                if step < 5 {
+                    app.set_wizard_step(step + 1);
+
+                    // Special handling for step transitions
+                    match step {
+                        0 => {
+                            // Welcome -> Distro detection
+                            let _distro = detect_distro();
+                            app.set_wizard_distro(slint::SharedString::from(distro_pretty_name()));
+                        }
+                        1 => {
+                            // Distro detection -> Module selection
+                            let distro = detect_distro();
+                            let suggested = get_suggested_modules_for_distro(&distro);
+                            // Convert suggested modules to WizardModule and set the model
+                            let wizard_modules: Vec<crate::WizardModule> = suggested
+                                .iter()
+                                .map(|m| crate::WizardModule {
+                                    name: m.name.clone().into(),
+                                    description: m.description.clone().into(),
+                                    reason: m.reason.clone().into(),
+                                    selected: m.selected,
+                                })
+                                .collect();
+                            app.set_wizard_modules(wizard_modules.as_slice().into());
+                            app.invoke_append_log(slint::SharedString::from(format!(
+                                "Found {} suggested modules",
+                                suggested.len()
+                            )));
+                        }
+                        2 => {
+                            // Module selection -> Dry-run preview
+                            // Generate dry-run preview
+                            let _distro = detect_distro();
+                            let suggested = get_suggested_modules_for_distro(&_distro);
+                            let preview = generate_dry_run_preview(&suggested);
+                            app.set_wizard_preview(slint::SharedString::from(preview));
+                            app.invoke_append_log(slint::SharedString::from(
+                                "Dry-run preview generated",
+                            ));
+                        }
+                        3 => {
+                            // Dry-run -> Confirm
+                            app.set_wizard_confirmed(false);
+                        }
+                        4 => {
+                            // Confirm -> Complete (actual apply happens in wizard_confirm)
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let handle = handle.clone();
+        app.on_wizard_prev(move || {
+            if let Some(_app) = handle.upgrade() {
+                let step = _app.get_wizard_step();
+                if step > 0 {
+                    _app.set_wizard_step(step - 1);
+                }
+            }
+        });
+    }
+
+    {
+        let handle = handle.clone();
+        app.on_wizard_toggle_module(move |_i: i32| {
+            if let Some(_app) = handle.upgrade() {
+                // The two-way binding in Slint handles this automatically
+            }
+        });
+    }
+
+    {
+        let handle = handle.clone();
+        let tx = tx.clone();
+        let dir = dir.clone();
+        let mods = discovered.clone();
+        app.on_wizard_confirm(move || {
+            if let Some(app) = handle.upgrade() {
+                let step = app.get_wizard_step();
+                if step == 4 {
+                    // Apply step - run the selected modules
+                    let model = app.get_wizard_modules();
+                    let mut selected_modules = Vec::new();
+                    for i in 0..model.row_count() {
+                        if let Some(row) = model.row_data(i)
+                            && row.selected
+                            && let Some(module) = mods.iter().find(|m| m.name == row.name.as_str())
+                        {
+                            selected_modules.push(module.clone());
+                        }
+                    }
+                    if !selected_modules.is_empty() {
+                        app.set_running(true);
+                        app.set_wizard_step(5); // Complete step
+                        let tx = tx.clone();
+                        let dir = dir.clone();
+                        spawn_worker(&handle, tx, dir, selected_modules, "apply", false);
+                    }
+                } else if step == 5 {
+                    // Complete step - mark wizard done and go to main UI
+                    let marker_path = wizard_marker_path();
+                    let tx = tx.clone();
+                    if let Err(e) = mark_wizard_complete(&marker_path) {
+                        tx.send(Event::Log(format!("Failed to mark wizard complete: {}", e)))
+                            .ok();
+                    }
+                    app.set_wizard_active(false);
+                    app.set_current_page(-1); // Overview page
+                    app.invoke_append_log(slint::SharedString::from(
+                        "Wizard complete! You can now manage modules from the main screen.",
+                    ));
+                }
+            }
+        });
+    }
+
+    {
+        let handle = handle.clone();
+        let tx = tx.clone();
+        let marker_path = wizard_marker_path();
+        app.on_wizard_skip(move || {
+            if let Some(app) = handle.upgrade() {
+                if let Err(e) = mark_wizard_complete(&marker_path) {
+                    let tx = tx.clone();
+                    tx.send(Event::Log(format!("Failed to mark wizard complete: {}", e)))
+                        .ok();
+                }
+                app.set_wizard_active(false);
+                app.set_current_page(-1); // Overview page
+                app.invoke_append_log(slint::SharedString::from(
+                    "Wizard skipped. You can run it again by deleting the config file.",
+                ));
+            }
+        });
+    }
+
+    // Re-run Wizard callback
+    {
+        let handle = handle.clone();
+        app.on_rerun_wizard(move || {
+            if let Some(app) = handle.upgrade() {
+                app.set_wizard_active(true);
+                app.set_wizard_step(0);
+                app.set_wizard_distro(slint::SharedString::from(""));
+                app.set_wizard_preview(slint::SharedString::from(""));
+                app.set_wizard_confirmed(false);
+                app.invoke_append_log(slint::SharedString::from(
+                    "Wizard restarted. Detecting distribution...",
+                ));
             }
         });
     }

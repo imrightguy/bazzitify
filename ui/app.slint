@@ -8,6 +8,13 @@ export struct ModuleInfo {
     status: string,
 }
 
+export struct WizardModule {
+    name: string,
+    description: string,
+    reason: string,
+    selected: bool,
+}
+
 // ── Palette ──
 global Palette {
     out property <color> base: #1e1e2e;
@@ -70,6 +77,14 @@ export component AppWindow inherits Window {
     in-out property <[string]> profiles;
     in-out property <string> selected-profile;
 
+    // Wizard properties
+    in-out property <bool> wizard-active;
+    in-out property <int> wizard-step;      // 0=welcome, 1=distro, 2=modules, 3=dry-run, 4=confirm, 5=complete
+    in-out property <string> wizard-distro;
+    in-out property <string> wizard-preview;
+    in-out property <[WizardModule]> wizard-modules;
+    in-out property <bool> wizard-confirmed;
+
     callback select-module(int);
     callback apply-module(int);
     callback undo-module(int);
@@ -80,6 +95,14 @@ export component AppWindow inherits Window {
     callback export-profile(string);
     callback import-profile(string);
     callback load-profiles();
+
+    // Wizard callbacks
+    callback wizard-next();
+    callback wizard-prev();
+    callback wizard-toggle-module(int);
+    callback wizard-confirm();
+    callback wizard-skip();
+    callback rerun-wizard();
 
     public function append-log(line: string) {
         root.log-text += line + "\n";
@@ -130,6 +153,11 @@ export component AppWindow inherits Window {
                             text: "Refresh";
                             enabled: !root.running;
                             clicked => { root.load-profiles(); }
+                        }
+                        Button {
+                            text: "Re-run Wizard";
+                            enabled: !root.running;
+                            clicked => { root.rerun-wizard(); }
                         }
                     }
 
@@ -240,7 +268,335 @@ export component AppWindow inherits Window {
                 horizontal-stretch: 1;
                 background: Palette.base;
 
-                if root.current-page < 0: ScrollView {
+                // Wizard page (shown when wizard-active is true)
+                if root.wizard-active: ScrollView {
+                    VerticalLayout {
+                        padding: 24px;
+                        spacing: 16px;
+
+                        // Step indicator
+                        HorizontalLayout {
+                            spacing: 8px;
+                            for i in 6: Rectangle {
+                                width: 24px;
+                                height: 24px;
+                                border-radius: 12px;
+                                background: i <= root.wizard-step ? Palette.accent : Palette.surface;
+                                Text {
+                                    text: "{i + 1}";
+                                    color: i <= root.wizard-step ? Palette.base : Palette.subtext;
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // Welcome step
+                        if root.wizard-step == 0: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Welcome to bazzitify";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                }
+                                Text {
+                                    text: "This wizard will help you set up your system for optimal gaming performance.\n\nIt will detect your Linux distribution, suggest relevant optimization modules, and let you preview the changes before applying them.";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Skip Wizard";
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-skip(); }
+                                    }
+                                    Button {
+                                        text: "Get Started";
+                                        primary: true;
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-next(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Distro detection step
+                        if root.wizard-step == 1: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Detecting Distribution";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                }
+                                Text {
+                                    text: "We detected your distribution as:";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle {
+                                    height: 60px;
+                                    border-radius: 8px;
+                                    background: Palette.surface;
+                                    HorizontalLayout {
+                                        padding-left: 16px;
+                                        alignment: center;
+                                        spacing: 12px;
+                                        Rectangle {
+                                            width: 48px;
+                                            height: 48px;
+                                            background: Palette.accent;
+                                            border-radius: 24px;
+                                            Text { text: "🐧"; font-size: 24px; horizontal-alignment: center; vertical-alignment: center; }
+                                        }
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Text {
+                                                text: root.wizard-distro;
+                                                font-size: 18px;
+                                                font-weight: 700;
+                                                color: Palette.text;
+                                            }
+                                            Text {
+                                                text: "Based on /etc/os-release";
+                                                font-size: 11px;
+                                                color: Palette.faint;
+                                            }
+                                        }
+                                    }
+                                }
+                                Text {
+                                    text: "Is this correct? If not, you can still continue — module suggestions will be based on this detection.";
+                                    color: Palette.faint;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Back";
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-prev(); }
+                                    }
+                                    Button {
+                                        text: "Continue";
+                                        primary: true;
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-next(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Module selection step
+                        if root.wizard-step == 2: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Select Modules to Apply";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                }
+                                Text {
+                                    text: "These modules are recommended for your distribution. Uncheck any you don't want.";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                for m[i] in wizard-modules: Rectangle {
+                                    height: 72px;
+                                    border-radius: 8px;
+                                    background: Palette.surface;
+                                    HorizontalLayout {
+                                        padding-left: 14px;
+                                        padding-right: 14px;
+                                        spacing: 12px;
+                                        CheckBox {
+                                            checked <=> m.selected;
+                                            enabled: !root.running;
+                                        }
+                                        VerticalLayout {
+                                            alignment: center;
+                                            horizontal-stretch: 1;
+                                            spacing: 2px;
+                                            Text {
+                                                text: m.name;
+                                                color: Palette.text;
+                                                font-size: 14px;
+                                                font-weight: 600;
+                                            }
+                                            Text {
+                                                text: m.description;
+                                                color: Palette.subtext;
+                                                font-size: 12px;
+                                                overflow: elide;
+                                            }
+                                        }
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Text {
+                                                text: "💡 " + m.reason;
+                                                color: Palette.yellow;
+                                                font-size: 11px;
+                                                wrap: word-wrap;
+                                                max-width: 300px;
+                                            }
+                                        }
+                                    }
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Back";
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-prev(); }
+                                    }
+                                    Button {
+                                        text: "Preview Changes";
+                                        primary: true;
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-next(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Dry-run preview step
+                        if root.wizard-step == 3: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Dry-Run Preview";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                }
+                                Text {
+                                    text: "This is what will happen when you apply the selected modules:";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle {
+                                    border-radius: 8px;
+                                    background: #1a1a2e;
+                                    padding: 16px;
+                                    Text {
+                                        text: root.wizard-preview;
+                                        color: Palette.green;
+                                        font-family: "monospace";
+                                        font-size: 12px;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Back";
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-prev(); }
+                                    }
+                                    Button {
+                                        text: "Apply Changes";
+                                        primary: true;
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-next(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Confirm step
+                        if root.wizard-step == 4: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Ready to Apply";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.text;
+                                }
+                                Text {
+                                    text: "Click \"Apply\" to run the selected modules. This may require your password for sudo operations.";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                CheckBox {
+                                    text: "I understand this will modify system configuration";
+                                    checked <=> root.wizard-confirmed;
+                                    font-size: 13px;
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Back";
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-prev(); }
+                                    }
+                                    Button {
+                                        text: "Apply";
+                                        primary: true;
+                                        enabled: root.wizard-confirmed && !root.running;
+                                        clicked => { root.wizard-confirm(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Complete step
+                        if root.wizard-step == 5: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: "Setup Complete!";
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.green;
+                                }
+                                Text {
+                                    text: "Your system has been optimized for gaming. You can now use bazzitify to manage individual modules or run the wizard again later.";
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle { height: 20px; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: end;
+                                    Button {
+                                        text: "Finish";
+                                        primary: true;
+                                        enabled: !root.running;
+                                        clicked => { root.wizard-confirm(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Overview page
+                if root.current-page < 0 && !root.wizard-active: ScrollView {
                     VerticalLayout {
                         padding: 24px;
                         spacing: 10px;

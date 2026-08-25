@@ -5,3 +5,4 @@ pub mod module;
 pub mod profile;
 pub mod runner;
 pub mod state;
+pub mod wizard;

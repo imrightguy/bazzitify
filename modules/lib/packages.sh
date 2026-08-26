@@ -359,17 +359,37 @@ _resolve_opensuse() {
         lib32-gamemode) echo "gamemode-32bit" ;;
         
         flatpak) echo "flatpak" ;;
-        flathub) echo "flatpak" ;;
-        
-        htop) echo "htop" ;;
-        btop) echo "btop" ;;
-        neofetch) echo "neofetch" ;;
-        fastfetch) echo "fastfetch" ;;
+                flathub) echo "flatpak" ;;
 
-        nvidia-dkms) echo "nvidia-computeG06 nvidia-gfxG06-kmp-default nvidia-glG06 nvidia-glG06-32bit" ;;
-        amd-pstate) echo "" ;;
-        intel-pstate) echo "" ;;
-        *) return 1 ;;
+                # Input peripherals (added for openSUSE support)
+                lact) echo "lact" ;;
+                corectrl) echo "corectrl" ;;
+                libratbag) echo "libratbag" ;;
+                input-remapper-gtk) echo "input-remapper-gtk" ;;
+                opentabletdriver) echo "opentabletdriver" ;;
+                xone-dkms) echo "xone" ;;
+                distrobox) echo "distrobox" ;;
+                waydroid) echo "waydroid" ;;
+
+                # VA-API / codecs
+                libva-mesa-driver) echo "Mesa-libva" ;;
+                gstreamer-vaapi) echo "gstreamer-plugins-vaapi" ;;
+
+                # 32-bit packages (some may require additional repos)
+                lib32-mangohud) echo "mangohud-32bit" ;;
+                lib32-obs-vkcapture) echo "obs-vkcapture-32bit" ;;
+                lib32-vkbasalt) echo "vkbasalt-32bit" ;;
+                lib32-gamemode) echo "libgamemode0-32bit" ;;
+
+                htop) echo "htop" ;;
+                btop) echo "btop" ;;
+                neofetch) echo "neofetch" ;;
+                fastfetch) echo "fastfetch" ;;
+
+                nvidia-dkms) echo "nvidia-computeG06 nvidia-gfxG06-kmp-default nvidia-glG06 nvidia-glG06-32bit" ;;
+                amd-pstate) echo "" ;;
+                intel-pstate) echo "" ;;
+                *) return 1 ;;
     esac
 }
 

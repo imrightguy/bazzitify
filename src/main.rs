@@ -852,6 +852,18 @@ fn run_gui() {
         app.on_select_module(move |i| {
             if let Some(app) = handle.upgrade() {
                 app.set_current_page(i);
+                // Fetch current power profile if power-profiles module is selected
+                if i >= 0 {
+                    let model = app.get_modules();
+                    let idx: usize = i as usize;
+                    let row_opt = model.row_data(idx);
+                    #[allow(clippy::collapsible_if)]
+                    if let Some(row) = row_opt {
+                        if row.name == "power-profiles" {
+                            app.invoke_get_power_profile();
+                        }
+                    }
+                }
             }
         });
     }
@@ -970,6 +982,35 @@ fn run_gui() {
         let dir2 = dir.clone();
         let mods = discovered.clone();
         app.on_undo_module(move |i| run_one(&handle, &tx, &dir2, &mods, "undo", i));
+    }
+
+    // Get current power profile callback
+    {
+        let handle = handle.clone();
+        app.on_get_power_profile(move || {
+            if let Some(app) = handle.upgrade() {
+                // Run powerprofilesctl get to fetch current profile
+                let output = std::process::Command::new("powerprofilesctl")
+                    .arg("get")
+                    .output();
+                let profile_str = match output {
+                    Ok(out) if out.status.success() => {
+                        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if s.is_empty() {
+                            "unknown".to_string()
+                        } else {
+                            s
+                        }
+                    }
+                    Ok(out) => {
+                        let err = String::from_utf8_lossy(&out.stderr);
+                        format!("error: {}", err.trim())
+                    }
+                    Err(e) => format!("error: {}", e),
+                };
+                app.set_power_profile(slint::SharedString::from(profile_str));
+            }
+        });
     }
 
     // Profile export callback

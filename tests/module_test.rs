@@ -283,5 +283,5 @@ fn discovers_power_profiles_module() {
     );
     assert!(power.has_apply, "power-profiles should have module_apply");
     assert!(power.has_undo, "power-profiles should have module_undo");
-    assert_eq!(power.depends, vec!["kernel-params", "sysctl"]);
+    assert_eq!(power.depends, vec!["services"]);
 }

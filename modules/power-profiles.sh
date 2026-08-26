@@ -1,14 +1,17 @@
 #!/bin/bash
-# desc: CPU power profiles / governor tuning for gaming (performance, AMD P-state, Intel p-state, power-profiles-daemon)
+# desc: CPU power profiles / governor tuning for gaming vs battery (laptop-aware, power-profiles-daemon + tuned)
 # long: Configures CPU frequency scaling for gaming workloads, matching Bazzite's out-of-the-box behavior:
 # long: • Detects CPU vendor (AMD/Intel) and applies vendor-specific kernel parameters
 # long: • AMD: amd_pstate=active (or passive with shared_mem=1), energy_performance_preference=performance
 # long: • Intel: intel_pstate=active with no_hwp if needed, energy_performance_preference=performance
 # long: • Sets CPU governor to 'performance' via cpupower and kernel cmdline (cpufreq.default_governor=performance)
 # long: • Installs/enables power-profiles-daemon with 'performance' profile as user default
-# long: • Creates /etc/tuned/bazzitify-gaming.tuned for tuned users as alternative
-# long: Laptop caveat: performance governor reduces battery life; user opts in knowingly
-# requires: kernel-params sysctl
+# long: • Creates /etc/tuned/bazzitify-gaming for tuned users as alternative
+# long: • On laptops: also creates bazzitify-battery tuned profile (powersave governor, balanced GPU/disk)
+# long: • Laptop detection via systemd-detect-virt, upower, or /sys/class/power_supply/BAT* (best-effort)
+# long: • Integrates with powerprofilesctl for runtime profile switching (performance/balanced/power-saver)
+# long: Requires tuned package on some distros for custom profiles; laptop detection is best-effort
+# depends: services
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/distro.sh"
@@ -16,6 +19,50 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/packages.sh"
 
 MARKER="bazzitify:power-profiles"
 GOVERNOR_MARKER_FILE="/etc/default/bazzitify-governor-backup"
+
+detect_laptop() {
+    # Returns 0 (true) if running on a laptop, 1 (false) otherwise
+    # Best-effort detection via multiple methods
+    
+    # Method 1: systemd-detect-virt (checks for container/VM, but also chassis type)
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        local chassis
+        chassis=$(systemd-detect-virt --chassis 2>/dev/null || true)
+        case "$chassis" in
+            laptop|portable|notebook)
+                return 0
+                ;;
+            desktop|server|vm|container)
+                # Explicitly not a laptop, but continue checking other methods
+                ;;
+        esac
+    fi
+    
+    # Method 2: upower (check for battery device)
+    if command -v upower >/dev/null 2>&1; then
+        if upower -e 2>/dev/null | grep -q '/battery_\|/BAT'; then
+            return 0
+        fi
+    fi
+    
+    # Method 3: Check /sys/class/power_supply for battery
+    if [ -d /sys/class/power_supply ]; then
+        for bat in /sys/class/power_supply/BAT*; do
+            [ -e "$bat" ] && return 0
+        done
+        # Some systems use different naming
+        for bat in /sys/class/power_supply/*; do
+            [ -e "$bat" ] && [ -f "$bat/type" ] && grep -qi "battery" "$bat/type" 2>/dev/null && return 0
+        done
+    fi
+    
+    # Method 4: Check for lid switch (laptop indicator)
+    if [ -d /proc/acpi/button/lid ] && [ -n "$(ls -A /proc/acpi/button/lid 2>/dev/null)" ]; then
+        return 0
+    fi
+    
+    return 1
+}
 
 detect_cpu_vendor() {
     # Returns: amd, intel, or unknown
@@ -299,6 +346,57 @@ remove_tuned_profile() {
     # Note: we don't disable tuned service as other profiles may use it
 }
 
+setup_battery_tuned_profile() {
+    local tuned_dir="/etc/tuned/bazzitify-battery"
+    local tuned_file="$tuned_dir/tuned.conf"
+
+    local _pkgs
+    if ! _pkgs=$(resolve_package_list tuned) || [ -z "$_pkgs" ]; then
+        echo "packages not mapped for this distro; skipping install" >&2
+        return 1
+    fi
+    pkg_install $_pkgs
+
+    # Create the tuned battery profile
+    sudo mkdir -p "$tuned_dir"
+    sudo tee "$tuned_file" >/dev/null <<'EOF'
+# bazzitify battery tuned profile
+[main]
+summary=Bazzitify battery saving profile
+include=powersave
+
+[cpu]
+governor=powersave
+energy_performance_preference=balance_power
+min_perf_pct=0
+
+[sysctl]
+vm.swappiness=60
+vm.vfs_cache_pressure=100
+EOF
+
+    echo "created battery tuned profile at $tuned_file"
+}
+
+remove_battery_tuned_profile() {
+    local tuned_dir="/etc/tuned/bazzitify-battery"
+
+    # Revert to default tuned profile if we're currently using battery profile
+    if command -v tuned-adm >/dev/null 2>&1; then
+        local current_profile
+        current_profile=$(tuned-adm active 2>/dev/null | awk -F': ' '/Current active profile/ {print $2}' || echo "")
+        if [ "$current_profile" = "bazzitify-battery" ]; then
+            sudo tuned-adm profile balanced 2>/dev/null && echo "reverted tuned profile from battery to balanced" || echo "tuned-adm revert from battery failed"
+        fi
+    fi
+
+    # Remove our custom battery profile
+    if [ -d "$tuned_dir" ]; then
+        sudo rm -rf "$tuned_dir"
+        echo "removed battery tuned profile directory $tuned_dir"
+    fi
+}
+
 module_apply() {
     echo "=== bazzitify power-profiles: gaming CPU optimization ==="
 
@@ -317,6 +415,15 @@ module_apply() {
 
     if [ "$vendor" = "unknown" ]; then
         echo "Warning: Could not detect CPU vendor (AMD/Intel). Some optimizations may not apply."
+    fi
+
+    # Detect laptop
+    local is_laptop=false
+    if detect_laptop; then
+        is_laptop=true
+        echo "Laptop detected: will create battery profile"
+    else
+        echo "Desktop system detected: gaming profile only"
     fi
 
     # Save current governor for undo
@@ -339,16 +446,30 @@ module_apply() {
     # Setup tuned profile as alternative
     setup_tuned_profile
 
+    # Setup battery profile on laptops
+    if [ "$is_laptop" = true ]; then
+        setup_battery_tuned_profile
+        echo "Battery profile (bazzitify-battery) created for laptop power saving"
+    fi
+
     echo ""
     echo "=== power-profiles applied ==="
     echo "CPU vendor: $vendor"
+    echo "System type: $([ "$is_laptop" = true ] && echo "laptop" || echo "desktop")"
     echo "Governor: performance (immediate + kernel cmdline)"
     echo "Energy performance preference: performance"
     echo "power-profiles-daemon: performance profile active"
     echo "tuned profile: bazzitify-gaming created and applied"
+    if [ "$is_laptop" = true ]; then
+        echo "tuned battery profile: bazzitify-battery created (switch via powerprofilesctl or tuned-adm)"
+    fi
     echo ""
     echo "Note: Kernel parameters require reboot to take full effect."
-    echo "Laptop warning: performance governor reduces battery life."
+    if [ "$is_laptop" = true ]; then
+        echo "Laptop: use 'powerprofilesctl set power-saver' or 'tuned-adm profile bazzitify-battery' for battery saving."
+    else
+        echo "Laptop warning: performance governor reduces battery life."
+    fi
 }
 
 module_undo() {
@@ -366,12 +487,15 @@ module_undo() {
     # Disable power-profiles-daemon (restore to balanced)
     disable_power_profiles_daemon
 
-    # Remove tuned profile
+    # Remove tuned gaming profile
     remove_tuned_profile
+
+    # Remove battery tuned profile if it exists
+    remove_battery_tuned_profile
 
     echo ""
     echo "=== power-profiles undone ==="
-    echo "Governor restored, kernel params cleaned, power-profiles-daemon set to balanced, tuned profile removed."
+    echo "Governor restored, kernel params cleaned, power-profiles-daemon set to balanced, tuned profiles removed."
     echo "Packages left installed; to remove:"
     local pm
     pm=$(detect_package_manager)

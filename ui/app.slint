@@ -74,10 +74,11 @@ export component AppWindow inherits Window {
     in property <bool> running;
     in property <string> distro-info;
     in-out property <bool> dry-run;
-    in-out property <[string]> profiles;
-    in-out property <string> selected-profile;
+    in property <[string]> profiles;
+        in-out property <string> selected-profile;
+        in-out property <string> power-profile;  // Current power profile from powerprofilesctl
 
-    // Wizard properties
+        // Wizard properties
     in-out property <bool> wizard-active;
     in-out property <int> wizard-step;      // 0=welcome, 1=distro, 2=modules, 3=dry-run, 4=confirm, 5=complete
     in-out property <string> wizard-distro;
@@ -95,6 +96,7 @@ export component AppWindow inherits Window {
     callback export-profile(string);
     callback import-profile(string);
     callback load-profiles();
+    callback get-power-profile();  // Fetch current power profile from powerprofilesctl
 
     // Wizard callbacks
     callback wizard-next();
@@ -722,6 +724,26 @@ export component AppWindow inherits Window {
                                 color: Palette.text;
                                 font-size: 13px;
                                 wrap: word-wrap;
+                            }
+
+                            // Power profile status for power-profiles module
+                            if mod.name == "power-profiles" && root.power-profile != "" : Rectangle {
+                                background: Palette.surface;
+                                border-radius: 6px;
+                                padding: 12px;
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Text {
+                                        text: @tr("power-profile-current-label");
+                                        font-weight: 700;
+                                        color: Palette.subtext;
+                                    }
+                                    Text {
+                                        text: root.power-profile;
+                                        font-weight: 700;
+                                        color: Palette.accent;
+                                    }
+                                }
                             }
 
                             Rectangle { height: 10px; }

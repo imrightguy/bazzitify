@@ -70,6 +70,7 @@ wizard-complete-finish = Finish
 # ── Module detail pane ──
 module-detail-undo = Undo
 module-detail-apply = Apply
+power-profile-current-label = Current profile:
 
 # ── Overview page ──
 overview-title = Modules

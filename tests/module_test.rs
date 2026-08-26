@@ -18,6 +18,21 @@ fn parses_module_with_dependencies() {
 }
 
 #[test]
+fn parses_module_with_comma_separated_dependencies() {
+    let script = "#!/bin/bash\n# desc: Kernel params\n# requires: gpu-drivers, sysctl\nmodule_apply() { echo hi; }\n";
+    let m = Module::parse("kernel-params", script).unwrap();
+    assert_eq!(m.depends, vec!["gpu-drivers", "sysctl"]);
+}
+
+#[test]
+fn parses_module_with_mixed_comma_and_whitespace_dependencies() {
+    let script =
+        "#!/bin/bash\n# desc: Complex deps\n# requires: a, b c, d\nmodule_apply() { echo hi; }\n";
+    let m = Module::parse("complex", script).unwrap();
+    assert_eq!(m.depends, vec!["a", "b", "c", "d"]);
+}
+
+#[test]
 fn parses_module_with_legacy_depends_header() {
     // Backward compatibility: # depends: should still work
     let script = "#!/bin/bash\n# desc: Kernel params\n# depends: gpu-drivers sysctl\nmodule_apply() { echo hi; }\n";

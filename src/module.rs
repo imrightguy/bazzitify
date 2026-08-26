@@ -38,14 +38,24 @@ impl Module {
                 }
             }
         }
-        // Dependencies: "# requires: module1 module2 ..." (preferred) or "# depends: ..." (legacy)
+        /// Parse a comma-or-whitespace separated dependency list.
+        fn parse_dep_list(s: &str) -> Vec<String> {
+            s.split(',')
+                .flat_map(|part| part.split_whitespace())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        }
+
+        // Dependencies: "# requires: module1, module2 ..." (preferred) or "# depends: ..." (legacy)
         let mut depends = Vec::new();
         for line in source.lines() {
             let t = line.trim();
             if let Some(rest) = t.strip_prefix("# requires:") {
                 let rest = rest.trim();
                 if !rest.is_empty() {
-                    depends = rest.split_whitespace().map(String::from).collect();
+                    depends = parse_dep_list(rest);
                 }
                 break; // only first # requires: line counts
             }
@@ -57,7 +67,7 @@ impl Module {
                 if let Some(rest) = t.strip_prefix("# depends:") {
                     let rest = rest.trim();
                     if !rest.is_empty() {
-                        depends = rest.split_whitespace().map(String::from).collect();
+                        depends = parse_dep_list(rest);
                     }
                     break;
                 }

@@ -62,7 +62,7 @@ for the mutable distro you already run.**
 | **hdr-vrr** | HDR/VRR gaming helpers — compositor detection, opt-in env vars, KWin scripts, gamescope stack (Bazzite parity) | ✅ full¹ |
 | **input-peripherals** | Input peripherals — Xbox (xone), Razer, and tablet driver support | partial¹ |
 | **kernel-params** | Kernel params — nowatchdog, split_lock_detect=off, amdgpu overrides (bootloader-aware) | ✅ idempotent |
-| **power-profiles** | CPU power profiles / governor tuning for gaming vs battery (laptop-aware, power-profiles-daemon + tuned profiles) | partial¹ |
+| **power-profiles** | CPU power profiles / governor tuning for gaming vs battery (laptop-aware, power-profiles-daemon + tuned) | partial¹ |
 | **services** | Services — enable gamemode/gamemoded socket, disable useless-for-gaming services | ✅ full |
 | **streaming-containers** | Streaming & containers — Sunshine stream host, distrobox, waydroid | partial¹ |
 | **sysctl** | sysctl latency/VM tweaks for gaming | ✅ full |

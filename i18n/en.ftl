@@ -17,6 +17,8 @@ sidebar-status-working = ⟳ working…
 sidebar-modules-title = Modules
 sidebar-module-open = Open
 sidebar-select-checkbox = select
+sidebar-select-all = Select All
+sidebar-clear-all = Clear All
 sidebar-overview = Overview
 
 # ── Module list ──

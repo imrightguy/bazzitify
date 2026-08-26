@@ -74,6 +74,7 @@ export component AppWindow inherits Window {
     in property <bool> running;
     in property <string> distro-info;
     in-out property <bool> dry-run;
+    in-out property <bool> select-all-checkbox;
     in property <[string]> profiles;
         in-out property <string> selected-profile;
         in-out property <string> power-profile;  // Current power profile from powerprofilesctl
@@ -171,6 +172,18 @@ export component AppWindow inherits Window {
                         activated => { root.select-module(-1); }
                     }
 
+                    HorizontalLayout {
+                        spacing: 8px;
+                        padding-left: 8px;
+                        padding-right: 6px;
+                        CheckBox {
+                            text: @tr("sidebar-select-all");
+                            checked <=> root.select-all-checkbox;
+                            enabled: !root.running;
+                            toggled => { root.select-all(root.select-all-checkbox); }
+                        }
+                    }
+
                     for m[i] in modules: Rectangle {
                         height: 34px;
                         border-radius: 6px;
@@ -234,6 +247,11 @@ export component AppWindow inherits Window {
                             text: @tr("sidebar-undo-selected");
                             enabled: !root.running;
                             clicked => { root.undo-selected(); }
+                        }
+                        Button {
+                            text: @tr("sidebar-clear-all");
+                            enabled: !root.running;
+                            clicked => { root.clear-selection(); }
                         }
                     }
                     Text {

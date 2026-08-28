@@ -84,17 +84,19 @@ struct ModuleJson {
     name: String,
     desc: Option<String>,
     long: Vec<String>,
-    status: String,
+    has_apply: bool,
+    has_undo: bool,
     depends: Vec<String>,
 }
 
 /// Result for apply/undo in JSON mode.
 #[derive(Debug, Serialize)]
 struct ApplyResultJson {
-    module: String,
     success: bool,
+    module: String,
+    action: String,
     output: String,
-    changed_files: Vec<String>,
+    error: Option<String>,
     duration_ms: u64,
 }
 
@@ -102,8 +104,9 @@ struct ApplyResultJson {
 #[derive(Debug, Serialize)]
 struct DryRunPlanJson {
     module: String,
-    action: String,
-    depends: Vec<String>,
+    would_apply: bool,
+    commands: Vec<String>,
+    warnings: Vec<String>,
 }
 
 enum Event {
@@ -383,7 +386,7 @@ fn output_json<T: Serialize>(value: &T, mode: JsonMode) {
 
 fn cli_list_modules(
     discovered: &[Module],
-    applied: &bazzitify::state::AppliedState,
+    _applied: &bazzitify::state::AppliedState,
     json_mode: JsonMode,
 ) {
     if json_mode != JsonMode::Off {
@@ -393,11 +396,8 @@ fn cli_list_modules(
                 name: m.name.clone(),
                 desc: m.description.clone(),
                 long: m.long_description.clone(),
-                status: if applied.is_applied(&m.name) {
-                    "applied".into()
-                } else {
-                    "available".into()
-                },
+                has_apply: m.has_apply,
+                has_undo: m.has_undo,
                 depends: m.depends.clone(),
             })
             .collect();
@@ -431,8 +431,16 @@ fn cli_dry_run(discovered: &[Module], json_mode: JsonMode) {
                 .iter()
                 .map(|m| DryRunPlanJson {
                     module: m.name.clone(),
-                    action: "apply".into(),
-                    depends: m.depends.clone(),
+                    would_apply: m.has_apply,
+                    commands: vec![format!(
+                        "module_apply  # {}",
+                        m.description.clone().unwrap_or_default()
+                    )],
+                    warnings: if m.depends.is_empty() {
+                        vec![]
+                    } else {
+                        vec![format!("Depends on: {}", m.depends.join(", "))]
+                    },
                 })
                 .collect();
             output_json(&plan, json_mode);
@@ -459,14 +467,16 @@ fn cli_apply_all(dir: &Path, discovered: &[Module], json_mode: JsonMode) -> i32 
                                 exit_code = 1;
                             }
                             if json_mode != JsonMode::Off {
-                                // Split stdout/stderr from combined output
-                                // For simplicity, we'll put all in stdout and leave stderr empty
-                                // A more sophisticated version could separate them
                                 results.push(ApplyResultJson {
-                                    module: m.name.clone(),
                                     success: r.success,
+                                    module: m.name.clone(),
+                                    action: "apply".into(),
                                     output: r.output.clone(),
-                                    changed_files: Vec::new(),
+                                    error: if r.success {
+                                        None
+                                    } else {
+                                        Some(r.output.clone())
+                                    },
                                     duration_ms: r.duration_ms,
                                 });
                             } else {
@@ -484,10 +494,11 @@ fn cli_apply_all(dir: &Path, discovered: &[Module], json_mode: JsonMode) -> i32 
                             exit_code = 1;
                             if json_mode != JsonMode::Off {
                                 results.push(ApplyResultJson {
-                                    module: m.name.clone(),
                                     success: false,
+                                    module: m.name.clone(),
+                                    action: "apply".into(),
                                     output: String::new(),
-                                    changed_files: Vec::new(),
+                                    error: Some(e.to_string()),
                                     duration_ms: 0,
                                 });
                             } else {
@@ -529,10 +540,15 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
                     }
                     if json_mode != JsonMode::Off {
                         let result = ApplyResultJson {
-                            module: m.name.clone(),
                             success: r.success,
+                            module: m.name.clone(),
+                            action: "apply".into(),
                             output: r.output.clone(),
-                            changed_files: Vec::new(),
+                            error: if r.success {
+                                None
+                            } else {
+                                Some(r.output.clone())
+                            },
                             duration_ms: r.duration_ms,
                         };
                         output_json(&result, json_mode);
@@ -546,10 +562,11 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
                     exit_code = 1;
                     if json_mode != JsonMode::Off {
                         let result = ApplyResultJson {
-                            module: m.name.clone(),
                             success: false,
+                            module: m.name.clone(),
+                            action: "apply".into(),
                             output: String::new(),
-                            changed_files: Vec::new(),
+                            error: Some(e.to_string()),
                             duration_ms: 0,
                         };
                         output_json(&result, json_mode);
@@ -561,10 +578,11 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
         } else {
             if json_mode != JsonMode::Off {
                 let result = ApplyResultJson {
-                    module: m.name.clone(),
                     success: false,
+                    module: m.name.clone(),
+                    action: "apply".into(),
                     output: String::new(),
-                    changed_files: Vec::new(),
+                    error: Some("Module has no apply function".into()),
                     duration_ms: 0,
                 };
                 output_json(&result, json_mode);
@@ -576,17 +594,19 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
     } else {
         if json_mode != JsonMode::Off {
             let result = ApplyResultJson {
-                module: name.into(),
                 success: false,
+                module: name.into(),
+                action: "apply".into(),
                 output: String::new(),
-                changed_files: Vec::new(),
+                error: Some("Unknown module".into()),
                 duration_ms: 0,
             };
             output_json(&result, json_mode);
         } else {
             eprintln!("Unknown module: {}", name);
         }
-        exit_code = 1;
+        // Unknown module is a usage error (exit code 2)
+        exit_code = 2;
     }
     exit_code
 }
@@ -602,10 +622,15 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
                     }
                     if json_mode != JsonMode::Off {
                         let result = ApplyResultJson {
-                            module: m.name.clone(),
                             success: r.success,
+                            module: m.name.clone(),
+                            action: "undo".into(),
                             output: r.output.clone(),
-                            changed_files: Vec::new(),
+                            error: if r.success {
+                                None
+                            } else {
+                                Some(r.output.clone())
+                            },
                             duration_ms: r.duration_ms,
                         };
                         output_json(&result, json_mode);
@@ -619,10 +644,11 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
                     exit_code = 1;
                     if json_mode != JsonMode::Off {
                         let result = ApplyResultJson {
-                            module: m.name.clone(),
                             success: false,
+                            module: m.name.clone(),
+                            action: "undo".into(),
                             output: String::new(),
-                            changed_files: Vec::new(),
+                            error: Some(e.to_string()),
                             duration_ms: 0,
                         };
                         output_json(&result, json_mode);
@@ -634,10 +660,11 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
         } else {
             if json_mode != JsonMode::Off {
                 let result = ApplyResultJson {
-                    module: m.name.clone(),
                     success: false,
+                    module: m.name.clone(),
+                    action: "undo".into(),
                     output: String::new(),
-                    changed_files: Vec::new(),
+                    error: Some("Module has no undo function".into()),
                     duration_ms: 0,
                 };
                 output_json(&result, json_mode);
@@ -649,17 +676,19 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
     } else {
         if json_mode != JsonMode::Off {
             let result = ApplyResultJson {
-                module: name.into(),
                 success: false,
+                module: name.into(),
+                action: "undo".into(),
                 output: String::new(),
-                changed_files: Vec::new(),
+                error: Some("Unknown module".into()),
                 duration_ms: 0,
             };
             output_json(&result, json_mode);
         } else {
             eprintln!("Unknown module: {}", name);
         }
-        exit_code = 1;
+        // Unknown module is a usage error (exit code 2)
+        exit_code = 2;
     }
     exit_code
 }

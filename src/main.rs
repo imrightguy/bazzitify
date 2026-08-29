@@ -928,6 +928,30 @@ fn run_gui() {
         });
     }
 
+    // Selection changed callback - sync select-all-checkbox with individual selections
+    {
+        let handle = handle.clone();
+        app.on_selection_changed(move || {
+            if let Some(app) = handle.upgrade() {
+                let model = app.get_modules();
+                let mut all_selected = true;
+                let mut any_selected = false;
+                for i in 0..model.row_count() {
+                    if let Some(row) = model.row_data(i) {
+                        if row.selected {
+                            any_selected = true;
+                        } else {
+                            all_selected = false;
+                        }
+                    }
+                }
+                // select-all-checkbox should be true only if ALL modules are selected
+                // and there's at least one module
+                app.set_select_all_checkbox(any_selected && all_selected);
+            }
+        });
+    }
+
     // Batch apply selected modules
     {
         let handle = handle.clone();

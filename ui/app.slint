@@ -94,6 +94,7 @@ export component AppWindow inherits Window {
     callback undo-selected();
     callback select-all(bool);
     callback clear-selection();
+    callback selection-changed();
     callback export-profile(string);
     callback import-profile(string);
     callback load-profiles();
@@ -195,6 +196,7 @@ export component AppWindow inherits Window {
                             CheckBox {
                                 checked <=> m.selected;
                                 enabled: !root.running;
+                                toggled => { root.selection-changed(); }
                             }
                             VerticalLayout {
                                 alignment: center;
@@ -214,7 +216,21 @@ export component AppWindow inherits Window {
                                 Text { text: "✓"; color: Palette.green; font-size: 11px;
                                        horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            if m.status != "" && m.status != "applied": Rectangle {
+                            if m.status == "undone": Rectangle {
+                                width: 20px;
+                                border-radius: 10px;
+                                background: #89b4fa33;
+                                Text { text: "✓"; color: #89b4fa; font-size: 11px;
+                                       horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            if m.status == "running…": Rectangle {
+                                width: 20px;
+                                border-radius: 10px;
+                                background: #f9e2af33;
+                                Text { text: "⟳"; color: Palette.yellow; font-size: 11px;
+                                       horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            if m.status == "failed": Rectangle {
                                 width: 20px;
                                 border-radius: 10px;
                                 background: #f38ba833;
@@ -699,7 +715,9 @@ export component AppWindow inherits Window {
                                     Rectangle {
                                         border-radius: 11px;
                                         background: mod.status == "applied" ? #a6e3a155 :
-                                                    (mod.status == "running…" ? #f9e2af55 : Palette.surface);
+                                                    (mod.status == "undone" ? #89b4fa55 :
+                                                     (mod.status == "running…" ? #f9e2af55 :
+                                                      (mod.status == "failed" ? #f38ba855 : Palette.surface)));
                                         width: 92px;
                                         height: 22px;
                                         Text {

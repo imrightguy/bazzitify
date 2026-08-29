@@ -168,14 +168,13 @@ and wires up Apply / Undo buttons. No registration, no manifest.
 | **Arch / CachyOS** | ✅ primary target |
 | **Fedora** | 🟢 supported (dnf) |
 | Debian / Ubuntu bases | 🟡 `gaming-packages` has an apt branch |
-| openSUSE | 🔜 planned |
+|| openSUSE Tumbleweed | 🟢 supported (zypper) ||
 
 ## 🗺️ Roadmap
 
 - [ ] Dry-run toggle inside the GUI
 - [ ] Module dependency ordering (e.g. gpu-drivers → kernel-params)
 - [ ] HDR / VRR parity audit against upstream Bazzite
-- [ ] openSUSE support (zypper branch)
 - [ ] Export/import a "profile" of selected modules
 
 ## 💜 Special Thanks

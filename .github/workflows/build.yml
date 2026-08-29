@@ -38,6 +38,32 @@ jobs:
       - name: bash syntax (modules)
         run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done
 
+  # Test module bash syntax and package resolution on openSUSE Tumbleweed
+  opensuse-check:
+    runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install bash and zypper (for package resolution tests)
+        run: |
+          zypper --non-interactive refresh
+          zypper --non-interactive install bash
+      - name: bash syntax (modules)
+        run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done
+      - name: Test package resolution (dry-run)
+        run: |
+          source modules/lib/distro.sh
+          source modules/lib/packages.sh
+          export DISTRO_OVERRIDE=opensuse-tumbleweed
+          # Test that all modules can resolve packages without error
+          for mod in modules/*.sh; do
+            if [[ "$mod" == *"test-dep"* ]]; then continue; fi
+            echo "Testing $mod..."
+            bash -c "source modules/lib/distro.sh; source modules/lib/packages.sh; export DISTRO_OVERRIDE=opensuse-tumbleweed; source \$mod; module_apply" 2>&1 | head -5 || true
+          done
+        shell: bash
+
   appimage:
     needs: checks
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

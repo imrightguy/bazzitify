@@ -5,10 +5,11 @@ edition = "2024"
 description = "Bazzite-style gaming optimization for mutable distros — Rust GUI"
 
 [dependencies]
-slint = "1.17.1"
+slint = { version = "1.17.1", features = ["gettext"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+regex = "1.10"
 thiserror = "2.0"
 dirs = "5.0"
 chrono = { version = "0.4", features = ["serde"] }

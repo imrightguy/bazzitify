@@ -694,6 +694,9 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
 }
 
 fn main() {
+    // Initialize translations for @tr() macro in Slint UI
+    slint::init_translations!(concat!(env!("CARGO_MANIFEST_DIR"), "/translations/"));
+
     let args: Vec<String> = env::args().collect();
 
     // Parse --json flag first

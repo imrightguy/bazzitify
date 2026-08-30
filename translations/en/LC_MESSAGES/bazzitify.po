@@ -1,0 +1,171 @@
+# bazzitify translations
+# Copyright (C) 2026 Christopher Maltais
+# This file is distributed under the same license as the bazzitify package.
+# FIRST AUTHOR <christopher@maltais.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bazzitify 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-29 00:00+0000\n"
+"PO-Revision-Date: 2026-08-29 00:00+0000\n"
+"Last-Translator: Christopher Maltais <christopher@maltais.com>\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "app-title"
+msgstr "bazzitify"
+
+msgid "emoji-linux"
+msgstr "🐧"
+
+msgid "log-label"
+msgstr "LOG"
+
+msgid "log-status-working"
+msgstr "Working…"
+
+msgid "module-detail-apply"
+msgstr "Apply"
+
+msgid "module-details-heading"
+msgstr "Details"
+
+msgid "module-detail-undo"
+msgstr "Undo"
+
+msgid "module-status-not-applied"
+msgstr "Not Applied"
+
+msgid "overview-title"
+msgstr "Overview"
+
+msgid "overview-description"
+msgstr "Select modules to apply or review details. Use the sidebar to navigate."
+
+msgid "power-profile-current-label"
+msgstr "Current Profile:"
+
+msgid "sidebar-apply-selected"
+msgstr "Apply Selected"
+
+msgid "sidebar-clear-all"
+msgstr "Clear All"
+
+msgid "sidebar-dry-run"
+msgstr "Dry Run"
+
+msgid "sidebar-export"
+msgstr "Export Profile"
+
+msgid "sidebar-import"
+msgstr "Import Profile"
+
+msgid "sidebar-module-open"
+msgstr "Open"
+
+msgid "sidebar-overview"
+msgstr "Overview"
+
+msgid "sidebar-refresh"
+msgstr "Refresh"
+
+msgid "sidebar-rerun-wizard"
+msgstr "Rerun Wizard"
+
+msgid "sidebar-select-all"
+msgstr "Select All"
+
+msgid "sidebar-select-checkbox"
+msgstr "Select"
+
+msgid "sidebar-status-working"
+msgstr "Working…"
+
+msgid "sidebar-undo-selected"
+msgstr "Undo Selected"
+
+msgid "wizard-complete-title"
+msgstr "All Done!"
+
+msgid "wizard-complete-description"
+msgstr "Your system is configured. Enjoy your optimized gaming experience."
+
+msgid "wizard-complete-finish"
+msgstr "Finish"
+
+msgid "wizard-confirm-title"
+msgstr "Confirm Changes"
+
+msgid "wizard-confirm-description"
+msgstr "Review the planned changes below. This will modify system configuration."
+
+msgid "wizard-confirm-checkbox"
+msgstr "I understand and want to proceed"
+
+msgid "wizard-confirm-apply"
+msgstr "Apply Changes"
+
+msgid "wizard-confirm-back"
+msgstr "Back"
+
+msgid "wizard-distro-title"
+msgstr "Detected Distribution"
+
+msgid "wizard-distro-detected"
+msgstr "We detected your distribution automatically."
+
+msgid "wizard-distro-source"
+msgstr "Detected from /etc/os-release"
+
+msgid "wizard-distro-confirm"
+msgstr "Is this correct? You can go back to re-detect."
+
+msgid "wizard-distro-continue"
+msgstr "Continue"
+
+msgid "wizard-distro-back"
+msgstr "Back"
+
+msgid "wizard-dryrun-title"
+msgstr "Dry Run Preview"
+
+msgid "wizard-dryrun-description"
+msgstr "No changes will be made. Review the commands that would run."
+
+msgid "wizard-dryrun-apply"
+msgstr "Apply for Real"
+
+msgid "wizard-dryrun-back"
+msgstr "Back"
+
+msgid "wizard-modules-title"
+msgstr "Select Modules"
+
+msgid "wizard-modules-description"
+msgstr "Choose which optimization modules to apply. Recommended modules are pre-selected."
+
+msgid "wizard-modules-reason-prefix"
+msgstr "Reason:"
+
+msgid "wizard-modules-preview"
+msgstr "Preview (Dry Run)"
+
+msgid "wizard-modules-back"
+msgstr "Back"
+
+msgid "wizard-welcome-title"
+msgstr "Welcome to bazzitify"
+
+msgid "wizard-welcome-description"
+msgstr "This wizard will guide you through optimizing your system for gaming. We'll detect your distribution, recommend modules, and show a preview before making any changes."
+
+msgid "wizard-welcome-get-started"
+msgstr "Get Started"
+
+msgid "wizard-welcome-skip"
+msgstr "Skip Wizard"

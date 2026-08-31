@@ -5,8 +5,9 @@ use bazzitify::module::{Module, ModuleGraph};
 use bazzitify::profile::{Profile, ProfileError};
 use bazzitify::runner::{RunOpts, run_module_opts};
 use bazzitify::wizard::{
-    generate_dry_run_preview, get_suggested_modules_for_distro, mark_wizard_complete,
-    should_show_wizard, wizard_marker_path,
+    SuggestedModule, detect_hardware_profile, generate_dry_run_preview,
+    get_suggested_modules_for_distro_and_hardware, mark_wizard_complete, should_show_wizard,
+    wizard_marker_path,
 };
 use serde::Serialize;
 use slint::Model;
@@ -1170,8 +1171,10 @@ fn run_gui() {
                         }
                         1 => {
                             // Distro detection -> Module selection
-                            let distro = detect_distro();
-                            let suggested = get_suggested_modules_for_distro(&distro);
+                            let distro = app.get_wizard_distro().to_string();
+                            let hardware = detect_hardware_profile();
+                            let suggested =
+                                get_suggested_modules_for_distro_and_hardware(&distro, &hardware);
                             // Convert suggested modules to WizardModule and set the model
                             let wizard_modules: Vec<crate::WizardModule> = suggested
                                 .iter()
@@ -1191,8 +1194,16 @@ fn run_gui() {
                         2 => {
                             // Module selection -> Dry-run preview
                             // Generate dry-run preview
-                            let _distro = detect_distro();
-                            let suggested = get_suggested_modules_for_distro(&_distro);
+                            let suggested = app
+                                .get_wizard_modules()
+                                .iter()
+                                .map(|module| SuggestedModule {
+                                    name: module.name.to_string(),
+                                    description: module.description.to_string(),
+                                    reason: module.reason.to_string(),
+                                    selected: module.selected,
+                                })
+                                .collect::<Vec<_>>();
                             let preview = generate_dry_run_preview(&suggested);
                             app.set_wizard_preview(slint::SharedString::from(preview));
                             app.invoke_append_log(slint::SharedString::from(

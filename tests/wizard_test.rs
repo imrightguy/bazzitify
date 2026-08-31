@@ -1,8 +1,10 @@
 //! Tests for first-run wizard functionality.
 
 use bazzitify::wizard::{
-    SuggestedModule, WizardState, WizardStep, generate_dry_run_preview,
-    get_suggested_modules_for_distro, mark_wizard_complete, should_show_wizard, wizard_marker_path,
+    FormFactor, GpuVendor, HardwareProfile, SuggestedModule, WizardState, WizardStep,
+    detect_hardware_profile_from, generate_dry_run_preview, get_suggested_modules_for_distro,
+    get_suggested_modules_for_distro_and_hardware, mark_wizard_complete, should_show_wizard,
+    wizard_marker_path,
 };
 use std::fs;
 
@@ -104,6 +106,53 @@ fn get_suggested_modules_for_opensuse_returns_core_modules() {
         "openSUSE needs kernel-params"
     );
     assert!(names.contains(&"codecs"), "openSUSE needs codecs");
+}
+
+#[test]
+fn hardware_detection_interprets_pci_vendor_and_laptop_chassis() {
+    let hardware = detect_hardware_profile_from(["0x10de"], Some("10"));
+
+    assert_eq!(hardware.gpu_vendor, GpuVendor::Nvidia);
+    assert_eq!(hardware.form_factor, FormFactor::Laptop);
+}
+
+#[test]
+fn laptop_nvidia_profile_adds_hardware_relevant_suggestions() {
+    let hardware = HardwareProfile {
+        gpu_vendor: GpuVendor::Nvidia,
+        form_factor: FormFactor::Laptop,
+    };
+
+    let suggestions = get_suggested_modules_for_distro_and_hardware("arch", &hardware);
+    let names: Vec<&str> = suggestions
+        .iter()
+        .map(|module| module.name.as_str())
+        .collect();
+
+    assert!(names.contains(&"power-profiles"));
+    assert!(names.contains(&"display-gpu-control"));
+    assert!(
+        suggestions
+            .iter()
+            .any(|module| module.name == "power-profiles" && module.reason.contains("Laptop"))
+    );
+}
+
+#[test]
+fn desktop_unknown_hardware_does_not_add_hardware_specific_modules() {
+    let hardware = HardwareProfile {
+        gpu_vendor: GpuVendor::Unknown,
+        form_factor: FormFactor::Desktop,
+    };
+
+    let suggestions = get_suggested_modules_for_distro_and_hardware("arch", &hardware);
+    let names: Vec<&str> = suggestions
+        .iter()
+        .map(|module| module.name.as_str())
+        .collect();
+
+    assert!(!names.contains(&"power-profiles"));
+    assert!(!names.contains(&"display-gpu-control"));
 }
 
 #[test]

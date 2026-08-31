@@ -411,6 +411,11 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                 }
+                                ComboBox {
+                                    model: ["Arch", "CachyOS", "Debian", "Ubuntu", "Other"];
+                                    current-value <=> root.wizard-distro;
+                                    enabled: !root.running;
+                                }
                                 Text {
                                     text: @tr("wizard-distro-confirm");
                                     color: Palette.faint;

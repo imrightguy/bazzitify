@@ -63,8 +63,99 @@ pub fn mark_wizard_complete(marker_path: &Path) -> std::io::Result<()> {
     fs::write(marker_path, "complete")
 }
 
-/// Get suggested modules for a given distro.
+/// Hardware traits that affect the wizard's safe default module selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuVendor {
+    Amd,
+    Intel,
+    Nvidia,
+    Unknown,
+}
+
+/// Form factor used to avoid recommending laptop-specific tuning to desktops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormFactor {
+    Laptop,
+    Desktop,
+    Unknown,
+}
+
+/// Detectable hardware inputs for the wizard suggestion policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HardwareProfile {
+    pub gpu_vendor: GpuVendor,
+    pub form_factor: FormFactor,
+}
+
+impl Default for HardwareProfile {
+    fn default() -> Self {
+        Self {
+            gpu_vendor: GpuVendor::Unknown,
+            form_factor: FormFactor::Unknown,
+        }
+    }
+}
+
+/// Convert PCI vendor IDs and a DMI chassis type into the profile used by the
+/// suggestion policy. Kept pure so the policy is testable without host hardware.
+pub fn detect_hardware_profile_from<I, S>(
+    vendor_ids: I,
+    chassis_type: Option<&str>,
+) -> HardwareProfile
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let gpu_vendor = vendor_ids
+        .into_iter()
+        .find_map(
+            |id| match id.as_ref().trim().to_ascii_lowercase().as_str() {
+                "0x10de" => Some(GpuVendor::Nvidia),
+                "0x1002" | "0x1022" => Some(GpuVendor::Amd),
+                "0x8086" => Some(GpuVendor::Intel),
+                _ => None,
+            },
+        )
+        .unwrap_or(GpuVendor::Unknown);
+    let form_factor = match chassis_type.map(str::trim) {
+        Some("8" | "9" | "10" | "14") => FormFactor::Laptop,
+        Some(_) => FormFactor::Desktop,
+        None => FormFactor::Unknown,
+    };
+
+    HardwareProfile {
+        gpu_vendor,
+        form_factor,
+    }
+}
+
+/// Detect local hardware conservatively. Missing sysfs information is treated
+/// as unknown so it can never trigger a hardware-specific recommendation.
+pub fn detect_hardware_profile() -> HardwareProfile {
+    let vendor_ids = fs::read_dir("/sys/class/drm")
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| fs::read_to_string(entry.path().join("device/vendor")).ok())
+        .collect::<Vec<_>>();
+    let chassis_type = fs::read_to_string("/sys/class/dmi/id/chassis_type").ok();
+    detect_hardware_profile_from(vendor_ids, chassis_type.as_deref())
+}
+
+/// Get suggested modules for a given distro using conservative hardware-neutral defaults.
 pub fn get_suggested_modules_for_distro(distro: &str) -> Vec<SuggestedModule> {
+    get_suggested_modules_for_distro_and_hardware(distro, &HardwareProfile::default())
+}
+
+/// Get suggested modules for a distro and explicit hardware profile.
+///
+/// Hardware-specific recommendations remain opt-in through the wizard checklist;
+/// this function only selects safe defaults relevant to the detected device.
+pub fn get_suggested_modules_for_distro_and_hardware(
+    distro: &str,
+    hardware: &HardwareProfile,
+) -> Vec<SuggestedModule> {
     let mut suggestions = vec![
         // Core modules for all distros
         SuggestedModule {
@@ -138,6 +229,27 @@ pub fn get_suggested_modules_for_distro(distro: &str) -> Vec<SuggestedModule> {
             });
         }
         _ => {}
+    }
+
+    match hardware.gpu_vendor {
+        GpuVendor::Amd | GpuVendor::Intel | GpuVendor::Nvidia => {
+            suggestions.push(SuggestedModule {
+                name: "display-gpu-control".to_string(),
+                description: "Install display and GPU control tools".to_string(),
+                reason: "Recommended for the detected GPU".to_string(),
+                selected: true,
+            })
+        }
+        GpuVendor::Unknown => {}
+    }
+
+    if hardware.form_factor == FormFactor::Laptop {
+        suggestions.push(SuggestedModule {
+            name: "power-profiles".to_string(),
+            description: "Configure power profiles for gaming and battery use".to_string(),
+            reason: "Laptop detected; provides a reversible gaming/battery profile".to_string(),
+            selected: true,
+        });
     }
 
     suggestions

@@ -300,3 +300,19 @@ fn discovers_power_profiles_module() {
     assert!(power.has_undo, "power-profiles should have module_undo");
     assert_eq!(power.depends, vec!["services"]);
 }
+
+#[test]
+fn power_profiles_undo_stops_the_service_it_enabled() {
+    let module = std::fs::read_to_string("modules/power-profiles.sh")
+        .expect("power-profiles module should be readable");
+    let disable_function = module
+        .split("disable_power_profiles_daemon() {")
+        .nth(1)
+        .and_then(|rest| rest.split("setup_tuned_profile() {").next())
+        .expect("disable_power_profiles_daemon function should exist");
+
+    assert!(
+        disable_function.contains("systemctl disable --now power-profiles-daemon.service"),
+        "undo must stop and disable power-profiles-daemon as required by BZ-19"
+    );
+}

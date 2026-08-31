@@ -280,13 +280,16 @@ setup_power_profiles_daemon() {
 }
 
 disable_power_profiles_daemon() {
-    # Restore to balanced profile
+    # Restore to balanced profile before stopping the service.
     if command -v powerprofilesctl >/dev/null 2>&1; then
         powerprofilesctl set balanced 2>/dev/null && echo "restored power-profiles-daemon profile to balanced" || echo "powerprofilesctl set balanced failed"
     fi
 
-    # Note: we don't disable the system service as other users may need it
-    # User can manually disable if desired
+    # The module enabled this service during apply; undo must stop and disable it.
+    # Packages remain installed so no user-installed software is removed.
+    sudo systemctl disable --now power-profiles-daemon.service 2>/dev/null \
+        && echo "stopped and disabled power-profiles-daemon" \
+        || echo "power-profiles-daemon service disable failed"
 }
 
 setup_tuned_profile() {

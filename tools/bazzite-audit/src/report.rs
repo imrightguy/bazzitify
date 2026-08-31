@@ -76,7 +76,7 @@ impl GapReport {
                 summary.total_tweaks
             ));
         }
-        s.push_str("\n");
+        s.push('\n');
         s
     }
 
@@ -122,7 +122,7 @@ impl GapReport {
                     m.bazzite_tweak.name, source, desc
                 ));
             }
-            s.push_str("\n");
+            s.push('\n');
         }
 
         s
@@ -156,7 +156,7 @@ impl GapReport {
                 source
             ));
         }
-        s.push_str("\n");
+        s.push('\n');
 
         s
     }
@@ -189,7 +189,7 @@ impl GapReport {
                 source
             ));
         }
-        s.push_str("\n");
+        s.push('\n');
 
         s
     }
@@ -222,7 +222,7 @@ impl GapReport {
                 m.bazzite_tweak.name, m.bazzite_tweak.category, reason
             ));
         }
-        s.push_str("\n");
+        s.push('\n');
 
         s
     }
@@ -273,7 +273,7 @@ impl GapReport {
                 na_count
             ));
         }
-        s.push_str("\n");
+        s.push('\n');
 
         s
     }
@@ -323,7 +323,7 @@ impl GapReport {
                         m.bazzite_tweak.source_file
                     ));
                 }
-                s.push_str("\n");
+                s.push('\n');
                 count += cat_missing.len().min(3);
             }
         }

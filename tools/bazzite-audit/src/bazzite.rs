@@ -62,10 +62,10 @@ impl BazziteRepo {
             for line in content.lines() {
                 if line.contains("FEDORA_VERSION") && line.contains("=") {
                     // Extract version like "44" from ARG FEDORA_VERSION="44"
-                    if let Some(start) = line.find('"') {
-                        if let Some(end) = line[start + 1..].find('"') {
-                            return Ok(format!("Fedora {}", &line[start + 1..start + 1 + end]));
-                        }
+                    if let Some(start) = line.find('"')
+                        && let Some(end) = line[start + 1..].find('"')
+                    {
+                        return Ok(format!("Fedora {}", &line[start + 1..start + 1 + end]));
                     }
                 }
             }
@@ -109,19 +109,18 @@ impl BazziteRepo {
             let rel_path = path.strip_prefix(&self.path).unwrap_or(path);
 
             // Skip binary files, only process text configs
-            if self.is_text_file(path) {
-                if let Ok(content) = fs::read_to_string(path) {
-                    if !content.trim().is_empty() {
-                        let category = self.categorize_system_file(rel_path);
-                        tweaks.push(BazziteTweak {
-                            category,
-                            name: self.extract_name_from_path(rel_path),
-                            description: self.generate_description(category, &content),
-                            source_file: rel_path.to_string_lossy().to_string(),
-                            raw_content: content,
-                        });
-                    }
-                }
+            if self.is_text_file(path)
+                && let Ok(content) = fs::read_to_string(path)
+                && !content.trim().is_empty()
+            {
+                let category = self.categorize_system_file(rel_path);
+                tweaks.push(BazziteTweak {
+                    category,
+                    name: self.extract_name_from_path(rel_path),
+                    description: self.generate_description(category, &content),
+                    source_file: rel_path.to_string_lossy().to_string(),
+                    raw_content: content,
+                });
             }
         }
 
@@ -144,23 +143,23 @@ impl BazziteRepo {
             let path = entry.path();
             let rel_path = path.strip_prefix(&self.path).unwrap_or(path);
 
-            if self.is_text_file(path) {
-                if let Ok(content) = fs::read_to_string(path) {
-                    if !content.trim().is_empty() && !content.starts_with("#!/") {
-                        // Skip shebang scripts for now, focus on config
-                        let category = TweakCategory::Other;
-                        tweaks.push(BazziteTweak {
-                            category,
-                            name: self.extract_name_from_path(rel_path),
-                            description: format!(
-                                "Build script: {}",
-                                path.file_name().unwrap().to_string_lossy()
-                            ),
-                            source_file: rel_path.to_string_lossy().to_string(),
-                            raw_content: content,
-                        });
-                    }
-                }
+            if self.is_text_file(path)
+                && let Ok(content) = fs::read_to_string(path)
+                && !content.trim().is_empty()
+                && !content.starts_with("#!/")
+            {
+                // Skip shebang scripts for now, focus on config
+                let category = TweakCategory::Other;
+                tweaks.push(BazziteTweak {
+                    category,
+                    name: self.extract_name_from_path(rel_path),
+                    description: format!(
+                        "Build script: {}",
+                        path.file_name().unwrap().to_string_lossy()
+                    ),
+                    source_file: rel_path.to_string_lossy().to_string(),
+                    raw_content: content,
+                });
             }
         }
 

@@ -79,15 +79,14 @@ enum JsonMode {
     Pretty,
 }
 
-/// Module info for JSON output (subset of Module fields).
+/// Stable module metadata for JSON output.
 #[derive(Debug, Serialize)]
 struct ModuleJson {
     name: String,
     desc: Option<String>,
-    long: Vec<String>,
-    has_apply: bool,
-    has_undo: bool,
-    depends: Vec<String>,
+    long_desc: Vec<String>,
+    applied_status: bool,
+    requires: Vec<String>,
 }
 
 /// Result for apply/undo in JSON mode.
@@ -366,7 +365,7 @@ fn parse_json_mode(args: &[String]) -> (JsonMode, Vec<String>) {
                     "Unknown --json value: {}. Use --json, --json=compact, or --json=pretty",
                     arg
                 );
-                process::exit(1);
+                process::exit(2);
             }
         } else {
             remaining.push(arg.clone());
@@ -387,7 +386,7 @@ fn output_json<T: Serialize>(value: &T, mode: JsonMode) {
 
 fn cli_list_modules(
     discovered: &[Module],
-    _applied: &bazzitify::state::AppliedState,
+    applied: &bazzitify::state::AppliedState,
     json_mode: JsonMode,
 ) {
     if json_mode != JsonMode::Off {
@@ -396,10 +395,9 @@ fn cli_list_modules(
             .map(|m| ModuleJson {
                 name: m.name.clone(),
                 desc: m.description.clone(),
-                long: m.long_description.clone(),
-                has_apply: m.has_apply,
-                has_undo: m.has_undo,
-                depends: m.depends.clone(),
+                long_desc: m.long_description.clone(),
+                applied_status: applied.is_applied(&m.name),
+                requires: m.depends.clone(),
             })
             .collect();
         output_json(&modules, json_mode);
@@ -606,8 +604,8 @@ fn cli_apply_single(dir: &Path, discovered: &[Module], name: &str, json_mode: Js
         } else {
             eprintln!("Unknown module: {}", name);
         }
-        // Unknown module is a usage error (exit code 2)
-        exit_code = 2;
+        // Unknown module is a module error (exit code 1).
+        exit_code = 1;
     }
     exit_code
 }
@@ -688,8 +686,8 @@ fn cli_undo(dir: &Path, discovered: &[Module], name: &str, json_mode: JsonMode) 
         } else {
             eprintln!("Unknown module: {}", name);
         }
-        // Unknown module is a usage error (exit code 2)
-        exit_code = 2;
+        // Unknown module is a module error (exit code 1).
+        exit_code = 1;
     }
     exit_code
 }
@@ -782,7 +780,7 @@ fn main() {
         Some("undo") => {
             if args.len() < 3 {
                 print_usage();
-                1
+                2
             } else {
                 cli_undo(&dir, &discovered, &args[2], json_mode)
             }

@@ -57,7 +57,7 @@ topological_order() {
     for dep in $deps; do
       if [[ -z "${modules[$dep]:-}" ]]; then
         echo "Error: module '$name' depends on unknown module '$dep'" >&2
-        exit 1
+        exit 3
       fi
       adj["$dep"]="${adj[$dep]} $name"
       indegree["$name"]=$((indegree["$name"] + 1))
@@ -94,7 +94,7 @@ topological_order() {
       fi
     done
     echo "Error: dependency cycle detected involving: ${remaining[*]}" >&2
-    exit 1
+    exit 3
   fi
 
   if [[ "$action" == "undo" ]]; then
@@ -178,6 +178,11 @@ module_deps_json() {
   fi
 }
 
+module_is_applied() {
+  local name="$1"
+  [[ -f "$LOG_FILE" ]] && grep -Fq " $name" "$LOG_FILE"
+}
+
 list_modules() {
   if [[ $JSON_MODE -eq 0 ]]; then
     echo "Available modules:"
@@ -203,20 +208,17 @@ list_modules() {
       local desc=$(module_desc "$f")
       local long_json=$(module_long_json "$f")
       local deps_json=$(module_deps_json "$f")
-      local has_apply=false
-      local has_undo=false
-      module_has_apply "$name" && has_apply=true
-      module_has_undo "$name" && has_undo=true
+      local applied_status=false
+      module_is_applied "$name" && applied_status=true
 
       local module_json
       module_json=$(jq -n \
         --arg name "$name" \
         --arg desc "$desc" \
-        --argjson long "$long_json" \
-        --argjson has_apply "$has_apply" \
-        --argjson has_undo "$has_undo" \
-        --argjson depends "$deps_json" \
-        '{name: $name, desc: $desc, long: $long, has_apply: $has_apply, has_undo: $has_undo, depends: $depends}')
+        --argjson long_desc "$long_json" \
+        --argjson applied_status "$applied_status" \
+        --argjson requires "$deps_json" \
+        '{name: $name, desc: $desc, long_desc: $long_desc, applied_status: $applied_status, requires: $requires}')
       modules_json+=("$module_json")
     done
     # Combine into array
@@ -228,7 +230,7 @@ run_module() {
   local name="$1"; shift || true
   local f="$MODULES_DIR/$name.sh"
   if [[ ! -f "$f" ]]; then
-    echo "Unknown module: $name" >&2; exit 2
+    echo "Unknown module: $name" >&2; exit 1
   fi
   if [[ $JSON_MODE -eq 0 ]]; then
     echo "==> $name"
@@ -272,9 +274,9 @@ run_module() {
     output_json "$result"
   fi
 
-  # Map any execution failure to exit code 3
+  # Map module execution failures to exit code 1.
   if [[ $exit_code -ne 0 ]]; then
-    return 3
+    return 1
   fi
   return 0
 }
@@ -282,7 +284,7 @@ run_module() {
 undo_module() {
   local name="$1"
   local f="$MODULES_DIR/$name.sh"
-  [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 2; }
+  [[ -f "$f" ]] || { echo "Unknown module: $name" >&2; exit 1; }
   # shellcheck disable=SC1090
   source "$f"
   local start_time
@@ -319,9 +321,9 @@ undo_module() {
     output_json "$result"
   fi
 
-  # Map any execution failure to exit code 3
+  # Map module execution failures to exit code 1.
   if [[ $exit_code -ne 0 ]]; then
-    return 3
+    return 1
   fi
   return 0
 }
@@ -461,7 +463,7 @@ main() {
         undo_module "$2"
       else
         echo "Usage: bazzitify undo <module>" >&2
-        exit 1
+        exit 2
       fi
       ;;
     --all)

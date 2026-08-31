@@ -34,31 +34,25 @@ fn cli_json_list_compact() {
     let modules = json.as_array().unwrap();
     assert!(!modules.is_empty(), "Should have at least one module");
 
-    // Check structure of first module (matches current implementation)
+    // BZ-17's machine-readable module schema is deliberately stable.
     let first = &modules[0];
+    for field in ["name", "desc", "long_desc", "applied_status", "requires"] {
+        assert!(
+            first.get(field).is_some(),
+            "Module should have '{field}' field"
+        );
+    }
     assert!(
-        first.get("name").is_some(),
-        "Module should have 'name' field"
+        first["long_desc"].is_array(),
+        "long_desc should preserve all # long: lines as an array"
     );
     assert!(
-        first.get("desc").is_some(),
-        "Module should have 'desc' field"
+        first["applied_status"].is_boolean(),
+        "applied_status should report whether this module is currently applied"
     );
     assert!(
-        first.get("long").is_some(),
-        "Module should have 'long' field"
-    );
-    assert!(
-        first.get("has_apply").is_some(),
-        "Module should have 'has_apply' field"
-    );
-    assert!(
-        first.get("has_undo").is_some(),
-        "Module should have 'has_undo' field"
-    );
-    assert!(
-        first.get("depends").is_some(),
-        "Module should have 'depends' field"
+        first["requires"].is_array(),
+        "requires should contain the module dependency names"
     );
 }
 
@@ -151,16 +145,16 @@ fn cli_json_undo_success() {
 
 #[test]
 fn cli_json_module_not_found_exit_code() {
-    // Module not found should return exit code 2
+    // Unknown modules are module errors (exit code 1).
     let (code, _stdout, _stderr) = run_bazzitify(&["nonexistent_module_xyz", "--json"]);
-    assert_eq!(code, 2, "Exit code should be 2 for module not found");
+    assert_eq!(code, 1, "Exit code should be 1 for a module error");
 }
 
 #[test]
 fn cli_json_usage_error_exit_code() {
-    // Missing required argument for undo should return exit code 1
+    // Missing arguments are usage errors (exit code 2).
     let (code, _stdout, _stderr) = run_bazzitify(&["undo", "--json"]);
-    assert_eq!(code, 1, "Exit code should be 1 for usage error");
+    assert_eq!(code, 2, "Exit code should be 2 for a usage error");
 }
 
 #[test]

@@ -21,12 +21,12 @@ assert_eq() {
     local msg="${3:-}"
     if [[ "$expected" == "$actual" ]]; then
         echo "  PASS: $msg"
-        ((PASS++))
+        ((++PASS))
     else
         echo "  FAIL: $msg" >&2
         echo "    expected: '$expected'" >&2
         echo "    actual:   '$actual'" >&2
-        ((FAIL++))
+        ((++FAIL))
     fi
 }
 
@@ -37,12 +37,12 @@ assert_contains() {
     # Case-insensitive match for package names
     if [[ "${haystack,,}" == *"${needle,,}"* ]]; then
         echo "  PASS: $msg"
-        ((PASS++))
+        ((++PASS))
     else
         echo "  FAIL: $msg" >&2
         echo "    haystack: '$haystack'" >&2
         echo "    needle:   '$needle'" >&2
-        ((FAIL++))
+        ((++FAIL))
     fi
 }
 
@@ -51,10 +51,10 @@ assert_command_succeeds() {
     local msg="${2:-}"
     if eval "$cmd" >/dev/null 2>&1; then
         echo "  PASS: $msg"
-        ((PASS++))
+        ((++PASS))
     else
         echo "  FAIL: $msg" >&2
-        ((FAIL++))
+        ((++FAIL))
     fi
 }
 

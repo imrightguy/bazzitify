@@ -64,6 +64,24 @@ jobs:
           done
         shell: bash
 
+  # Test module package resolution on Fedora without changing the container.
+  fedora-check:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install bash (for module smoke tests)
+        run: dnf install -y bash
+      - name: bash syntax (modules)
+        run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done
+      - name: Module discovery
+        run: bash bin/bazzitify --list
+      - name: Dry-run a Fedora-safe module
+        run: bash bin/bazzitify --dry-run gaming-packages
+      - name: Test Fedora package resolution
+        run: bash tests/test_distro.sh
+
   appimage:
     needs: checks
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

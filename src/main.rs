@@ -935,6 +935,7 @@ fn run_gui() {
                         model.set_row_data(i, row);
                     }
                 }
+                app.set_selected_count(if v { model.row_count() as i32 } else { 0 });
             }
         });
     }
@@ -951,6 +952,7 @@ fn run_gui() {
                         model.set_row_data(i, row);
                     }
                 }
+                app.set_selected_count(0);
             }
         });
     }
@@ -963,15 +965,18 @@ fn run_gui() {
                 let model = app.get_modules();
                 let mut all_selected = true;
                 let mut any_selected = false;
+                let mut selected_count = 0;
                 for i in 0..model.row_count() {
                     if let Some(row) = model.row_data(i) {
                         if row.selected {
                             any_selected = true;
+                            selected_count += 1;
                         } else {
                             all_selected = false;
                         }
                     }
                 }
+                app.set_selected_count(selected_count);
                 // select-all-checkbox should be true only if ALL modules are selected
                 // and there's at least one module
                 app.set_select_all_checkbox(any_selected && all_selected);

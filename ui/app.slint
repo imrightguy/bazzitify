@@ -75,6 +75,7 @@ export component AppWindow inherits Window {
     in property <string> distro-info;
     in-out property <bool> dry-run;
     in-out property <bool> select-all-checkbox;
+    in property <int> selected-count;
     in property <[string]> profiles;
         in-out property <string> selected-profile;
         in-out property <string> power-profile;  // Current power profile from powerprofilesctl
@@ -264,12 +265,12 @@ export component AppWindow inherits Window {
                         Button {
                             text: @tr("sidebar-apply-selected");
                             primary: true;
-                            enabled: !root.running;
+                            enabled: !root.running && root.selected-count > 0;
                             clicked => { root.apply-selected(); }
                         }
                         Button {
                             text: @tr("sidebar-undo-selected");
-                            enabled: !root.running;
+                            enabled: !root.running && root.selected-count > 0;
                             clicked => { root.undo-selected(); }
                         }
                         Button {

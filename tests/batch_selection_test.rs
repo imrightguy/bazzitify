@@ -214,6 +214,23 @@ fn select_all_should_sync_with_individual_selections() {
 }
 
 #[test]
+fn batch_actions_require_at_least_one_selected_module() {
+    let slint = std::fs::read_to_string("ui/app.slint").expect("read Slint UI");
+
+    assert!(
+        slint.contains("in property <int> selected-count;"),
+        "the UI must receive the current selected-module count"
+    );
+    assert_eq!(
+        slint
+            .matches("enabled: !root.running && root.selected-count > 0;")
+            .count(),
+        2,
+        "apply and undo buttons must both stay disabled until a module is selected"
+    );
+}
+
+#[test]
 fn status_column_shows_running_when_module_in_progress() {
     // Status column should show "running…" when module is currently executing
     // This is a logic test - the actual UI uses status text from the Event::Status

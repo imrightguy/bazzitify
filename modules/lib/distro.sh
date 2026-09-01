@@ -193,6 +193,34 @@ pkg_remove() {
     esac
 }
 
+# Print the conservative, package-manager-specific command for a user to
+# remove packages manually. Modules intentionally do not remove packages on
+# undo because they cannot distinguish packages installed by bazzitify from
+# packages the user installed independently.
+# Usage: package_removal_command <package>...
+package_removal_command() {
+    local pkgs=("$@")
+    [[ ${#pkgs[@]} -eq 0 ]] && return 0
+
+    case "$(detect_package_manager)" in
+        pacman)
+            printf 'sudo pacman -Rns %s\n' "${pkgs[*]}"
+            ;;
+        apt)
+            printf 'sudo apt-get remove %s\n' "${pkgs[*]}"
+            ;;
+        zypper)
+            printf 'sudo zypper --non-interactive remove %s\n' "${pkgs[*]}"
+            ;;
+        dnf)
+            printf 'sudo dnf remove %s\n' "${pkgs[*]}"
+            ;;
+        *)
+            printf 'Remove manually with your package manager: %s\n' "${pkgs[*]}"
+            ;;
+    esac
+}
+
 # Get the package manager name for display
 get_package_manager_name() {
     detect_package_manager

@@ -408,7 +408,9 @@ module_undo() {
     echo ""
     echo "=== HDR/VRR undone ==="
     echo "Removed bazzitify-created configs only (tagged with $MARKER)"
-    echo "Packages left installed; to remove manually on Arch:"
-    echo "  sudo pacman -Rns kwin-effects-hdr colord libdisplay-info"
+    echo "Packages left installed; to remove manually:"
+    local packages
+    packages=$(resolve_package_list kwin-effects-hdr color-management gamescope libdisplay-info edid-decode)
+    package_removal_command $packages
     echo "Backup directory preserved at $BACKUP_DIR (safe to delete manually)"
 }

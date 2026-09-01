@@ -42,7 +42,7 @@ module_apply() {
 
 module_undo() {
     echo "codecs/overlay packages left installed — they're inert without per-game opt-in."
-    echo "to remove manually on Arch:"
+    echo "to remove manually:"
     local packages
     packages=$(resolve_package_list \
         libva-mesa-driver intel-media-driver gstreamer-vaapi \
@@ -50,5 +50,5 @@ module_undo() {
         obs-vkcapture lib32-obs-vkcapture \
         vkbasalt lib32-vkbasalt \
         ffmpeg gstreamer codecs vaapi vdpau)
-    echo "  sudo pacman -Rns $packages"
+    package_removal_command $packages
 }

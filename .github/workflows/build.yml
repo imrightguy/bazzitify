@@ -51,18 +51,14 @@ jobs:
           zypper --non-interactive install bash
       - name: bash syntax (modules)
         run: for f in modules/*.sh modules/lib/*.sh; do bash -n "$f"; done
-      - name: Test package resolution (dry-run)
-        run: |
-          source modules/lib/distro.sh
-          source modules/lib/packages.sh
-          export DISTRO_OVERRIDE=opensuse-tumbleweed
-          # Test that all modules can resolve packages without error
-          for mod in modules/*.sh; do
-            if [[ "$mod" == *"test-dep"* ]]; then continue; fi
-            echo "Testing $mod..."
-            bash -c "source modules/lib/distro.sh; source modules/lib/packages.sh; export DISTRO_OVERRIDE=opensuse-tumbleweed; source \$mod; module_apply" 2>&1 | head -5 || true
-          done
-        shell: bash
+      - name: Module discovery
+        run: bash bin/bazzitify --list
+      - name: Dry-run an openSUSE-safe module
+        run: bash bin/bazzitify --dry-run gaming-packages
+      - name: Test openSUSE package resolution
+        run: bash tests/test_distro.sh
+      - name: Verify openSUSE CI contract
+        run: bash tests/opensuse_ci_test.sh
 
   # Test module package resolution on Fedora without changing the container.
   fedora-check:

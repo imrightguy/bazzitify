@@ -168,7 +168,7 @@ and wires up Apply / Undo buttons. No registration, no manifest.
 | **Arch / CachyOS** | ✅ primary target |
 | **Fedora** | 🟢 supported (dnf) |
 | Debian / Ubuntu bases | 🟡 `gaming-packages` has an apt branch |
-|| openSUSE Tumbleweed | 🟢 supported (zypper) ||
+| **openSUSE Tumbleweed** | 🟢 supported (zypper) |
 
 ## 🗺️ Roadmap
 

@@ -5,7 +5,7 @@ use bazzitify::module::{Module, ModuleGraph};
 use bazzitify::profile::{Profile, ProfileError};
 use bazzitify::runner::{RunOpts, run_module_opts};
 use bazzitify::wizard::{
-    SuggestedModule, detect_hardware_profile, generate_dry_run_preview,
+    detect_hardware_profile, generate_dry_run_preview_from_modules,
     get_suggested_modules_for_distro_and_hardware, mark_wizard_complete, should_show_wizard,
     wizard_marker_path,
 };
@@ -43,6 +43,12 @@ fn modules_dir_from(appdir: Option<&Path>, dev: &Path, system: &Path) -> PathBuf
 #[cfg(test)]
 mod module_path_tests {
     use super::*;
+
+    #[test]
+    fn wizard_returns_to_confirmation_when_apply_fails() {
+        assert_eq!(wizard_apply_result_step(false), 4);
+        assert_eq!(wizard_apply_result_step(true), 6);
+    }
 
     #[test]
     fn appimage_modules_take_precedence_over_a_present_build_tree() {
@@ -112,7 +118,11 @@ struct DryRunPlanJson {
 enum Event {
     Log(String),
     Status(String, String),
-    Done,
+    Done { success: bool },
+}
+
+fn wizard_apply_result_step(success: bool) -> i32 {
+    if success { 6 } else { 4 }
 }
 
 fn set_module_status(app: &AppWindow, name: &str, status: &str) {
@@ -140,7 +150,7 @@ fn spawn_worker(
     std::thread::spawn(move || {
         if selected.is_empty() {
             tx.send(Event::Log("nothing selected".into())).ok();
-            tx.send(Event::Done).ok();
+            tx.send(Event::Done { success: true }).ok();
             return;
         }
 
@@ -155,7 +165,7 @@ fn spawn_worker(
             Ok(m) => m,
             Err(e) => {
                 tx.send(Event::Log(format!("dependency error: {e}"))).ok();
-                tx.send(Event::Done).ok();
+                tx.send(Event::Done { success: false }).ok();
                 return;
             }
         };
@@ -171,6 +181,7 @@ fn spawn_worker(
             .ok();
         }
 
+        let mut all_succeeded = true;
         for m in &sorted {
             if matches!(action, "undo") && !m.has_undo {
                 tx.send(Event::Log(format!(
@@ -221,6 +232,7 @@ fn spawn_worker(
                         tx.send(Event::Log(format!("✓ {} ok (exit 0)", m.name)))
                             .ok();
                     } else {
+                        all_succeeded = false;
                         tx.send(Event::Status(m.name.clone(), "✗ failed".into()))
                             .ok();
                         tx.send(Event::Log(format!(
@@ -231,6 +243,7 @@ fn spawn_worker(
                     }
                 }
                 Err(e) => {
+                    all_succeeded = false;
                     tx.send(Event::Status(m.name.clone(), "✗ failed".into()))
                         .ok();
                     tx.send(Event::Log(format!("error running {}: {e}", m.name)))
@@ -238,7 +251,10 @@ fn spawn_worker(
                 }
             }
         }
-        tx.send(Event::Done).ok();
+        tx.send(Event::Done {
+            success: all_succeeded,
+        })
+        .ok();
     });
 }
 
@@ -810,6 +826,7 @@ fn run_gui() {
     app.set_wizard_active(show_wizard);
     app.set_wizard_step(0);
     app.set_wizard_confirmed(false);
+    app.set_wizard_error(slint::SharedString::from(""));
 
     if show_wizard {
         // Detect distro for the wizard
@@ -868,9 +885,17 @@ fn run_gui() {
                             set_module_status(&app, &name, &status);
                         }
                     }
-                    Event::Done => {
+                    Event::Done { success } => {
                         if let Some(app) = weak.upgrade() {
                             app.set_running(false);
+                            if app.get_wizard_active() && app.get_wizard_step() == 5 {
+                                app.set_wizard_step(wizard_apply_result_step(success));
+                                if !success {
+                                    app.set_wizard_error(slint::SharedString::from(
+                                        "One or more modules failed. Review the log and try again.",
+                                    ));
+                                }
+                            }
                         }
                     }
                 });
@@ -1153,6 +1178,8 @@ fn run_gui() {
     // Wizard callbacks
     {
         let handle = handle.clone();
+        let dir = dir.clone();
+        let mods = discovered.clone();
         let _marker_path = wizard_marker_path();
         app.on_wizard_next(move || {
             if let Some(app) = handle.upgrade() {
@@ -1190,23 +1217,32 @@ fn run_gui() {
                             )));
                         }
                         2 => {
-                            // Module selection -> Dry-run preview
-                            // Generate dry-run preview
-                            let suggested = app
-                                .get_wizard_modules()
-                                .iter()
-                                .map(|module| SuggestedModule {
-                                    name: module.name.to_string(),
-                                    description: module.description.to_string(),
-                                    reason: module.reason.to_string(),
-                                    selected: module.selected,
+                            // Module selection -> Dry-run preview using the same runner as apply.
+                            let model = app.get_wizard_modules();
+                            let selected_modules = (0..model.row_count())
+                                .filter_map(|index| model.row_data(index))
+                                .filter(|row| row.selected)
+                                .filter_map(|row| {
+                                    mods.iter().find(|module| module.name == row.name.as_str())
                                 })
+                                .cloned()
                                 .collect::<Vec<_>>();
-                            let preview = generate_dry_run_preview(&suggested);
-                            app.set_wizard_preview(slint::SharedString::from(preview));
-                            app.invoke_append_log(slint::SharedString::from(
-                                "Dry-run preview generated",
-                            ));
+                            match generate_dry_run_preview_from_modules(&dir, &selected_modules) {
+                                Ok(preview) => {
+                                    app.set_wizard_preview(slint::SharedString::from(preview));
+                                    app.invoke_append_log(slint::SharedString::from(
+                                        "Dry-run preview generated",
+                                    ));
+                                }
+                                Err(error) => {
+                                    app.set_wizard_preview(slint::SharedString::from(format!(
+                                        "Dry-run preview failed: {error}"
+                                    )));
+                                    app.invoke_append_log(slint::SharedString::from(format!(
+                                        "Dry-run preview failed: {error}"
+                                    )));
+                                }
+                            }
                         }
                         3 => {
                             // Dry-run -> Confirm
@@ -1264,13 +1300,14 @@ fn run_gui() {
                         }
                     }
                     if !selected_modules.is_empty() {
+                        app.set_wizard_error(slint::SharedString::from(""));
                         app.set_running(true);
-                        app.set_wizard_step(5); // Complete step
+                        app.set_wizard_step(5); // Applying step; worker advances only on success
                         let tx = tx.clone();
                         let dir = dir.clone();
                         spawn_worker(&handle, tx, dir, selected_modules, "apply", false);
                     }
-                } else if step == 5 {
+                } else if step == 6 {
                     // Complete step - mark wizard done and go to main UI
                     let marker_path = wizard_marker_path();
                     let tx = tx.clone();
@@ -1317,6 +1354,7 @@ fn run_gui() {
                 app.set_wizard_step(0);
                 app.set_wizard_distro(slint::SharedString::from(""));
                 app.set_wizard_preview(slint::SharedString::from(""));
+                app.set_wizard_error(slint::SharedString::from(""));
                 app.set_wizard_confirmed(false);
                 app.invoke_append_log(slint::SharedString::from(
                     "Wizard restarted. Detecting distribution...",

@@ -1,10 +1,11 @@
 //! Tests for first-run wizard functionality.
 
+use bazzitify::module::Module;
 use bazzitify::wizard::{
     FormFactor, GpuVendor, HardwareProfile, SuggestedModule, WizardState, WizardStep,
-    detect_hardware_profile_from, generate_dry_run_preview, get_suggested_modules_for_distro,
-    get_suggested_modules_for_distro_and_hardware, mark_wizard_complete, should_show_wizard,
-    wizard_marker_path,
+    detect_hardware_profile_from, generate_dry_run_preview, generate_dry_run_preview_from_modules,
+    get_suggested_modules_for_distro, get_suggested_modules_for_distro_and_hardware,
+    mark_wizard_complete, should_show_wizard, wizard_marker_path,
 };
 use std::fs;
 
@@ -176,6 +177,33 @@ fn wizard_can_generate_dry_run_preview() {
     assert!(preview.contains("gpu-drivers"));
     assert!(preview.contains("kernel-params"));
     assert!(preview.contains("[dry-run]") || preview.contains("dry-run"));
+}
+
+#[test]
+fn wizard_dry_run_preview_includes_dependency_ordered_module_bodies() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "bazzitify-wizard-dry-run-test-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&temp_dir).unwrap();
+
+    let dependency_source = "# desc: Dependency\nmodule_apply() { echo dependency-body; }\n";
+    let dependent_source =
+        "# desc: Dependent\n# requires: dependency\nmodule_apply() { echo dependent-body; }\n";
+    fs::write(temp_dir.join("dependency.sh"), dependency_source).unwrap();
+    fs::write(temp_dir.join("dependent.sh"), dependent_source).unwrap();
+    let dependent = Module::parse("dependent", dependent_source).unwrap();
+    let dependency = Module::parse("dependency", dependency_source).unwrap();
+
+    let preview =
+        generate_dry_run_preview_from_modules(&temp_dir, &[dependent, dependency]).unwrap();
+
+    let dependency_index = preview.find("dependency-body").unwrap();
+    let dependent_index = preview.find("dependent-body").unwrap();
+    assert!(dependency_index < dependent_index);
+    assert!(preview.contains("[dry-run]"));
+
+    fs::remove_dir_all(&temp_dir).unwrap();
 }
 
 #[test]

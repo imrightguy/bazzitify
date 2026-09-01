@@ -81,9 +81,10 @@ export component AppWindow inherits Window {
 
         // Wizard properties
     in-out property <bool> wizard-active;
-    in-out property <int> wizard-step;      // 0=welcome, 1=distro, 2=modules, 3=dry-run, 4=confirm, 5=complete
+    in-out property <int> wizard-step;      // 0=welcome, 1=distro, 2=modules, 3=dry-run, 4=confirm, 5=applying, 6=complete
     in-out property <string> wizard-distro;
     in-out property <string> wizard-preview;
+    in-out property <string> wizard-error;
     in-out property <[WizardModule]> wizard-modules;
     in-out property <bool> wizard-confirmed;
 
@@ -158,11 +159,18 @@ export component AppWindow inherits Window {
                             enabled: !root.running;
                             clicked => { root.load-profiles(); }
                         }
-                        Button {
-                            text: @tr("sidebar-rerun-wizard");
-                            enabled: !root.running;
-                            clicked => { root.rerun-wizard(); }
-                        }
+                    }
+
+                    Text {
+                        text: @tr("sidebar-help");
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: Palette.faint;
+                    }
+                    Button {
+                        text: @tr("sidebar-rerun-wizard");
+                        enabled: !root.running;
+                        clicked => { root.rerun-wizard(); }
                     }
 
                     Rectangle { height: 4px; }
@@ -584,6 +592,12 @@ export component AppWindow inherits Window {
                                     checked <=> root.wizard-confirmed;
                                     font-size: 13px;
                                 }
+                                if root.wizard-error != "": Text {
+                                    text: root.wizard-error;
+                                    color: Palette.red;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                }
                                 Rectangle { height: 20px; }
                                 HorizontalLayout {
                                     spacing: 12px;
@@ -603,8 +617,32 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        // Complete step
+                        // Applying step
                         if root.wizard-step == 5: Rectangle {
+                            VerticalLayout {
+                                spacing: 12px;
+                                Text {
+                                    text: @tr("wizard-applying-title");
+                                    font-size: 28px;
+                                    font-weight: 800;
+                                    color: Palette.accent;
+                                }
+                                Text {
+                                    text: @tr("wizard-applying-description");
+                                    color: Palette.subtext;
+                                    font-size: 14px;
+                                    wrap: word-wrap;
+                                }
+                                Text {
+                                    text: @tr("sidebar-status-working");
+                                    color: Palette.yellow;
+                                    font-size: 13px;
+                                }
+                            }
+                        }
+
+                        // Complete step
+                        if root.wizard-step == 6: Rectangle {
                             VerticalLayout {
                                 spacing: 12px;
                                 Text {

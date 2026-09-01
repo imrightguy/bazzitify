@@ -10,6 +10,7 @@ sidebar-export = Export
 sidebar-import = Import
 sidebar-refresh = Refresh
 sidebar-rerun-wizard = Re-run Wizard
+sidebar-help = Help
 sidebar-dry-run = dry-run
 sidebar-apply-selected = Apply Selected
 sidebar-undo-selected = Undo Selected
@@ -64,7 +65,11 @@ wizard-confirm-checkbox = I understand this will modify system configuration
 wizard-confirm-back = Back
 wizard-confirm-apply = Apply
 
-# ── Wizard: Step 5 - Complete ──
+# ── Wizard: Step 5 - Applying ──
+wizard-applying-title = Applying Setup
+wizard-applying-description = bazzitify is applying the selected modules. Do not close the application until this finishes.
+
+# ── Wizard: Step 6 - Complete ──
 wizard-complete-title = Setup Complete!
 wizard-complete-description = Your system has been optimized for gaming. You can now use bazzitify to manage individual modules or run the wizard again later.
 wizard-complete-finish = Finish

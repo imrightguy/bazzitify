@@ -1,5 +1,7 @@
 //! First-run wizard functionality.
 
+use crate::module::{Module, ModuleGraph};
+use crate::runner::{RunOpts, run_module_opts};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -273,6 +275,35 @@ pub fn generate_dry_run_preview(suggested: &[SuggestedModule]) -> String {
     }
     preview.push_str("\nRun with --dry-run to see full dependency-ordered execution plan.");
     preview
+}
+
+/// Generate a dependency-ordered dry-run preview using the same module runner as apply.
+///
+/// This returns the actual `module_apply` function bodies with the runner's
+/// `[dry-run]` prefix and never executes a module.
+pub fn generate_dry_run_preview_from_modules(
+    modules_dir: &Path,
+    selected: &[Module],
+) -> Result<String, String> {
+    if selected.is_empty() {
+        return Ok("No modules selected for dry-run.".to_string());
+    }
+
+    let sorted = ModuleGraph::topological_sort(selected).map_err(|error| error.to_string())?;
+    let mut preview = String::from("DRY RUN — dependency-ordered module changes:\n");
+    for module in sorted {
+        preview.push_str(&format!("\n── apply {} ──\n", module.name));
+        let result = run_module_opts(modules_dir, &module, "apply", RunOpts { dry_run: true })
+            .map_err(|error| format!("could not inspect {}: {error}", module.name))?;
+        preview.push_str(&result.output);
+        if !result.success {
+            return Err(format!(
+                "dry-run inspection failed for {} (exit {:?})\n{}",
+                module.name, result.exit_code, result.output
+            ));
+        }
+    }
+    Ok(preview)
 }
 
 /// Get config directory path (shared with main.rs)

@@ -77,6 +77,9 @@ msgstr "Refresh"
 msgid "sidebar-rerun-wizard"
 msgstr "Rerun Wizard"
 
+msgid "sidebar-help"
+msgstr "Help"
+
 msgid "sidebar-select-all"
 msgstr "Select All"
 
@@ -97,6 +100,12 @@ msgstr "Your system is configured. Enjoy your optimized gaming experience."
 
 msgid "wizard-complete-finish"
 msgstr "Finish"
+
+msgid "wizard-applying-title"
+msgstr "Applying Setup"
+
+msgid "wizard-applying-description"
+msgstr "bazzitify is applying the selected modules. Do not close the application until this finishes."
 
 msgid "wizard-confirm-title"
 msgstr "Confirm Changes"

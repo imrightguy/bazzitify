@@ -78,6 +78,32 @@ fn translator_missing_key_returns_key() {
 /// entries in the translation .po file.
 /// This test runs at compile time to catch missing translations early.
 #[test]
+fn distro_picker_localizes_its_user_facing_fallback() {
+    use std::fs;
+    use std::path::Path;
+
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let slint_path = Path::new(manifest_dir).join("ui").join("app.slint");
+    let po_path = Path::new(manifest_dir)
+        .join("translations")
+        .join("en")
+        .join("LC_MESSAGES")
+        .join("bazzitify.po");
+
+    let slint_content = fs::read_to_string(&slint_path).expect("Failed to read app.slint");
+    let po_content = fs::read_to_string(&po_path).expect("Failed to read bazzitify.po");
+
+    assert!(
+        slint_content.contains("@tr(\"wizard-distro-other\")"),
+        "the distro picker must not leave its user-facing fallback as a raw Slint string"
+    );
+    assert!(
+        po_content.contains("msgid \"wizard-distro-other\""),
+        "the distro picker fallback must be present in the English gettext catalog"
+    );
+}
+
+#[test]
 fn translation_keys_complete_in_po_file() {
     use std::fs;
     use std::path::Path;

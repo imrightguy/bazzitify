@@ -420,7 +420,7 @@ export component AppWindow inherits Window {
                                     }
                                 }
                                 ComboBox {
-                                    model: ["Arch", "CachyOS", "Debian", "Ubuntu", "Other"];
+                                    model: ["Arch", "CachyOS", "Debian", "Ubuntu", @tr("wizard-distro-other")];
                                     current-value <=> root.wizard-distro;
                                     enabled: !root.running;
                                 }

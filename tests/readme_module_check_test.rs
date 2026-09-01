@@ -116,6 +116,22 @@ fn fs_modules_discovery_works() {
 }
 
 #[test]
+fn readme_module_check_workflow_uses_the_documented_path() {
+    let required = Path::new(".github/workflows/readme-module-check.yml");
+    let legacy = Path::new(".github/workflows/readme-module-table-check.yml");
+
+    assert!(
+        required.exists(),
+        "README module validation workflow must live at {}",
+        required.display()
+    );
+    assert!(
+        !legacy.exists(),
+        "legacy workflow path must not duplicate the documented workflow"
+    );
+}
+
+#[test]
 fn readme_and_fs_modules_should_match_except_known_drift() {
     // This test verifies that the README Modules table stays in sync with modules/ directory.
     // The CI workflow (.github/workflows/readme-module-check.yml) enforces this on every push/PR.

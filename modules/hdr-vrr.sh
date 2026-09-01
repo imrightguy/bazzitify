@@ -6,7 +6,8 @@
 # long: • Hyprland/sway: documents VRR enable steps; no forced config writes
 # long: • Creates /etc/environment.d/99-bazzitify-hdr.conf with opt-in vars (KWIN_DRM_USE_HARDWARE_CURSORS=1, VKD3D_CONFIG=dxr11, RADV_PERFTEST=aco,rt)
 # long: • VRR kernel param drm.vrr_enabled=1 managed via kernel-params module
-# long: Honest limits: HDR on Linux is compositor-dependent; not all monitors work; VRR needs monitor + GPU + compositor support.
+# long: Honest limits: HDR requires an HDR-capable monitor, GPU support, and a suitable cable; VRR requires a VRR-capable display.
+# long: HDR on Linux is compositor-dependent; not all monitors work.
 # long: Nothing is force-enabled — user opts in via GUI detail page; module_undo removes only bazzitify-created files.
 # requires: gpu-drivers display-gpu-control codecs kernel-params
 set -euo pipefail
@@ -324,7 +325,7 @@ module_apply() {
 
     # Install base packages for HDR/VRR
     local base_pkgs
-    if ! base_pkgs=$(resolve_package_list kwin-effects-hdr color-management libdisplay-info) || [ -z "$base_pkgs" ]; then
+    if ! base_pkgs=$(resolve_package_list kwin-effects-hdr color-management gamescope libdisplay-info edid-decode) || [ -z "$base_pkgs" ]; then
         echo "packages not mapped for this distro; skipping install" >&2
         return 1
     fi

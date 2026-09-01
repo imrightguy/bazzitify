@@ -134,6 +134,7 @@ _resolve_arch() {
         
         # Filesystems & storage
         libdisplay-info) echo "libdisplay-info" ;;
+        edid-decode) echo "edid-decode" ;;
         zram-generator) echo "zram-generator" ;;
         btrfs) echo "btrfs-progs" ;;
         fstrim) echo "util-linux" ;;
